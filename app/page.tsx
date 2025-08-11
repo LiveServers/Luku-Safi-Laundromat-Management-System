@@ -32,6 +32,7 @@ export default function Dashboard() {
   const [expensesChart, setExpensesChart] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>('');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -121,70 +122,103 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white shadow-sm border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
+          <div className="flex justify-between items-center py-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Laundromat Management</h1>
-              <p className="text-gray-600">Dashboard Overview</p>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Laundromat Management</h1>
+              <p className="text-sm sm:text-base text-gray-600 hidden sm:block">Dashboard Overview</p>
             </div>
-            <div className="flex space-x-4">
-              <Button onClick={() => router.push('/orders')}>Orders</Button>
-              <Button onClick={() => router.push('/customers')} variant="outline">Customers</Button>
+            
+            {/* Mobile Menu Button */}
+            <div className="md:hidden">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </Button>
+            </div>
+
+            {/* Desktop Navigation */}
+            <div className="hidden md:flex space-x-2 lg:space-x-4">
+              <Button onClick={() => router.push('/orders')} size="sm" className="text-xs lg:text-sm">Orders</Button>
+              <Button onClick={() => router.push('/customers')} variant="outline" size="sm" className="text-xs lg:text-sm">Customers</Button>
               {userRole === 'owner' && (
                 <>
-                  <Button onClick={() => router.push('/expenses')} variant="outline">Expenses</Button>
-                  <Button onClick={() => router.push('/services')} variant="outline">Services</Button>
-                  <Button onClick={() => router.push('/users')} variant="outline">Users</Button>
-                  <Button onClick={() => router.push('/reports')} variant="outline">Reports</Button>
+                  <Button onClick={() => router.push('/expenses')} variant="outline" size="sm" className="text-xs lg:text-sm">Expenses</Button>
+                  <Button onClick={() => router.push('/services')} variant="outline" size="sm" className="text-xs lg:text-sm">Services</Button>
+                  <Button onClick={() => router.push('/users')} variant="outline" size="sm" className="text-xs lg:text-sm">Users</Button>
+                  <Button onClick={() => router.push('/reports')} variant="outline" size="sm" className="text-xs lg:text-sm">Reports</Button>
                 </>
               )}
             </div>
           </div>
+
+          {/* Mobile Navigation Menu */}
+          {isMobileMenuOpen && (
+            <div className="md:hidden border-t bg-white py-4">
+              <div className="flex flex-col space-y-2">
+                <Button onClick={() => { router.push('/orders'); setIsMobileMenuOpen(false); }} variant="ghost" className="justify-start">Orders</Button>
+                <Button onClick={() => { router.push('/customers'); setIsMobileMenuOpen(false); }} variant="ghost" className="justify-start">Customers</Button>
+                {userRole === 'owner' && (
+                  <>
+                    <Button onClick={() => { router.push('/expenses'); setIsMobileMenuOpen(false); }} variant="ghost" className="justify-start">Expenses</Button>
+                    <Button onClick={() => { router.push('/services'); setIsMobileMenuOpen(false); }} variant="ghost" className="justify-start">Services</Button>
+                    <Button onClick={() => { router.push('/users'); setIsMobileMenuOpen(false); }} variant="ghost" className="justify-start">Users</Button>
+                    <Button onClick={() => { router.push('/reports'); setIsMobileMenuOpen(false); }} variant="ghost" className="justify-start">Reports</Button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {userRole === 'owner' && (
             <>
               <Card className="hover:shadow-lg transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                  <CardTitle className="text-xs sm:text-sm font-medium">Total Revenue</CardTitle>
                   <DollarSign className="h-4 w-4 text-green-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-green-600">
+                  <div className="text-lg sm:text-2xl font-bold text-green-600">
                     {formatCurrency(dashboardData?.totalRevenue || 0)}
                   </div>
-                  <p className="text-xs text-gray-600 mt-1">From paid orders</p>
+                  <p className="text-xs text-gray-600 mt-1 hidden sm:block">From paid orders</p>
                 </CardContent>
               </Card>
 
               <Card className="hover:shadow-lg transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
+                  <CardTitle className="text-xs sm:text-sm font-medium">Total Expenses</CardTitle>
                   <TrendingDown className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-red-600">
+                  <div className="text-lg sm:text-2xl font-bold text-red-600">
                     {formatCurrency(dashboardData?.totalExpenses || 0)}
                   </div>
-                  <p className="text-xs text-gray-600 mt-1">Operational costs</p>
+                  <p className="text-xs text-gray-600 mt-1 hidden sm:block">Operational costs</p>
                 </CardContent>
               </Card>
 
               <Card className="hover:shadow-lg transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
+                  <CardTitle className="text-xs sm:text-sm font-medium">Net Profit</CardTitle>
                   <TrendingUp className="h-4 w-4 text-blue-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className={`text-2xl font-bold ${(dashboardData?.profit || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                  <div className={`text-lg sm:text-2xl font-bold ${(dashboardData?.profit || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
                     {formatCurrency(dashboardData?.profit || 0)}
                   </div>
-                  <p className="text-xs text-gray-600 mt-1">Revenue - Expenses</p>
+                  <p className="text-xs text-gray-600 mt-1 hidden sm:block">Revenue - Expenses</p>
                 </CardContent>
               </Card>
             </>
@@ -192,20 +226,20 @@ export default function Dashboard() {
 
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium">Pending Orders</CardTitle>
               <Clock className="h-4 w-4 text-orange-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">
+              <div className="text-lg sm:text-2xl font-bold text-orange-600">
                 {dashboardData?.pendingOrders || 0}
               </div>
-              <p className="text-xs text-gray-600 mt-1">Awaiting completion</p>
+              <p className="text-xs text-gray-600 mt-1 hidden sm:block">Awaiting completion</p>
             </CardContent>
           </Card>
         </div>
 
         {/* Charts and Recent Orders */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Charts */}
           {userRole === 'owner' ? (
             <div className="lg:col-span-2">
@@ -221,7 +255,7 @@ export default function Dashboard() {
                       <CardTitle>Monthly Revenue</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <ResponsiveContainer width="100%" height={300}>
+                      <ResponsiveContainer width="100%" height={250}>
                         <LineChart data={revenueChart}>
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="month" />
@@ -246,7 +280,7 @@ export default function Dashboard() {
                       <CardTitle>Expenses by Category</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <ResponsiveContainer width="100%" height={300}>
+                      <ResponsiveContainer width="100%" height={250}>
                         <PieChart>
                           <Pie
                             data={expensesChart}
@@ -282,16 +316,16 @@ export default function Dashboard() {
                 <div className="space-y-4">
                   {dashboardData?.recentOrders?.map((order) => (
                     <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="font-medium text-sm">{order.customers?.name || 'Unknown Customer'}</p>
-                        <p className="text-xs text-gray-600">{order.service_type}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{order.customers?.name || 'Unknown Customer'}</p>
+                        <p className="text-xs text-gray-600 truncate">{order.service_type}</p>
                         <Badge variant={order.status === 'completed' ? 'default' : 'secondary'} className="text-xs mt-1">
                           {order.status}
                         </Badge>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right ml-2 flex-shrink-0">
                         <p className="font-medium text-sm">{formatCurrency(order.total_amount)}</p>
-                        <p className="text-xs text-gray-600">
+                        <p className="text-xs text-gray-600 hidden sm:block">
                           {new Date(order.created_at).toLocaleDateString()}
                         </p>
                       </div>
@@ -306,7 +340,7 @@ export default function Dashboard() {
 
             {/* Quick Stats */}
             {userRole === 'owner' && (
-              <Card className="mt-6">
+              <Card className="mt-4 sm:mt-6">
                 <CardHeader>
                   <CardTitle>Quick Stats</CardTitle>
                 </CardHeader>

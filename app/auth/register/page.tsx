@@ -56,19 +56,19 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 text-white rounded-full mb-4">
-            <Waves className="h-8 w-8" />
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-blue-600 text-white rounded-full mb-4">
+            <Waves className="h-6 w-6 sm:h-8 sm:w-8" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">Get Started</h1>
-          <p className="text-gray-600 mt-2">Create your laundromat management account</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Get Started</h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-2">Create your laundromat management account</p>
         </div>
 
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>Sign Up</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">Sign Up</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -87,6 +87,7 @@ export default function Register() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
+                  className="text-base" // Prevents zoom on iOS
                 />
               </div>
 
@@ -99,6 +100,7 @@ export default function Register() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  className="text-base" // Prevents zoom on iOS
                 />
               </div>
 
@@ -111,6 +113,7 @@ export default function Register() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  className="text-base" // Prevents zoom on iOS
                 />
               </div>
 
@@ -123,12 +126,13 @@ export default function Register() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
+                  className="text-base" // Prevents zoom on iOS
                 />
               </div>
 
               <Button 
                 type="submit" 
-                className="w-full" 
+                className="w-full text-base" 
                 disabled={loading}
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -137,7 +141,7 @@ export default function Register() {
             </form>
 
             <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm sm:text-base text-gray-600">
                 Already have an account?{' '}
                 <Link href="/auth/login" className="text-blue-600 hover:underline">
                   Sign in

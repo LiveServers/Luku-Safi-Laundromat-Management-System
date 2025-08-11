@@ -48,19 +48,19 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 text-white rounded-full mb-4">
-            <Waves className="h-8 w-8" />
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-blue-600 text-white rounded-full mb-4">
+            <Waves className="h-6 w-6 sm:h-8 sm:w-8" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">Welcome Back</h1>
-          <p className="text-gray-600 mt-2">Sign in to your laundromat management system</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Welcome Back</h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-2">Sign in to your laundromat management system</p>
         </div>
 
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>Sign In</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">Sign In</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -79,6 +79,7 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  className="text-base" // Prevents zoom on iOS
                 />
               </div>
 
@@ -91,12 +92,13 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  className="text-base" // Prevents zoom on iOS
                 />
               </div>
 
               <Button 
                 type="submit" 
-                className="w-full" 
+                className="w-full text-base" 
                 disabled={loading}
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -105,7 +107,7 @@ export default function Login() {
             </form>
 
             <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm sm:text-base text-gray-600">
                 Don't have an account?{' '}
                 <Link href="/auth/register" className="text-blue-600 hover:underline">
                   Sign up

@@ -111,31 +111,33 @@ export default function Customers() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white shadow-sm border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-4 gap-4">
+            <div className="flex items-center min-w-0">
               <Button 
                 variant="ghost" 
                 onClick={() => router.push('/')}
-                className="mr-4"
+                className="mr-2 sm:mr-4 flex-shrink-0"
+                size="sm"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Dashboard
+                <span className="hidden sm:inline">Back to Dashboard</span>
+                <span className="sm:hidden">Back</span>
               </Button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Customer Management</h1>
-                <p className="text-gray-600">Manage your customer database</p>
+              <div className="min-w-0">
+                <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Customer Management</h1>
+                <p className="text-sm sm:text-base text-gray-600 hidden sm:block">Manage your customer database</p>
               </div>
             </div>
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
-                <Button>
+                <Button size="sm" className="w-full sm:w-auto">
                   <Plus className="h-4 w-4 mr-2" />
                   New Customer
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-md mx-4">
                 <DialogHeader>
                   <DialogTitle>Add New Customer</DialogTitle>
                 </DialogHeader>
@@ -188,10 +190,10 @@ export default function Customers() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Search */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
+        <Card className="mb-4 sm:mb-6">
+          <CardContent className="pt-4 sm:pt-6">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
@@ -207,10 +209,51 @@ export default function Customers() {
         {/* Customers Table */}
         <Card>
           <CardHeader>
-            <CardTitle>Customers ({filteredCustomers.length})</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">Customers ({filteredCustomers.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
+            {/* Mobile Card View */}
+            <div className="block sm:hidden space-y-4">
+              {filteredCustomers.map((customer) => (
+                <Card key={customer.id} className="p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-base truncate">{customer.name}</p>
+                      <div className="space-y-1 mt-1">
+                        {customer.email && (
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Mail className="h-3 w-3 mr-1 flex-shrink-0" />
+                            <span className="truncate">{customer.email}</span>
+                          </div>
+                        )}
+                        {customer.phone && (
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Phone className="h-3 w-3 mr-1 flex-shrink-0" />
+                            <span>{customer.phone}</span>
+                          </div>
+                        )}
+                        {customer.address && (
+                          <div className="text-sm text-gray-600 truncate">
+                            {customer.address}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right ml-2 flex-shrink-0">
+                      <div className="text-xs text-gray-600">
+                        {new Date(customer.created_at).toLocaleDateString()}
+                      </div>
+                      <Button variant="ghost" size="sm" className="mt-1">
+                        View Orders
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden sm:block overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -263,12 +306,13 @@ export default function Customers() {
                   ))}
                 </TableBody>
               </Table>
-              {filteredCustomers.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  No customers found matching your search criteria.
-                </div>
-              )}
             </div>
+            
+            {filteredCustomers.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                No customers found matching your search criteria.
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
