@@ -215,31 +215,33 @@ export default function Expenses() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white shadow-sm border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-4 gap-4">
+            <div className="flex items-center min-w-0">
               <Button 
                 variant="ghost" 
                 onClick={() => router.push('/')}
-                className="mr-4"
+                className="mr-2 sm:mr-4 flex-shrink-0"
+                size="sm"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Dashboard
+                <span className="hidden sm:inline">Back to Dashboard</span>
+                <span className="sm:hidden">Back</span>
               </Button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Expenses Management</h1>
-                <p className="text-gray-600">Track your business expenses</p>
+              <div className="min-w-0">
+                <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Expenses Management</h1>
+                <p className="text-sm sm:text-base text-gray-600 hidden sm:block">Track your business expenses</p>
               </div>
             </div>
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
-                <Button>
+                <Button size="sm" className="w-full sm:w-auto">
                   <Plus className="h-4 w-4 mr-2" />
                   New Expense
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-md mx-4">
                 <DialogHeader>
                   <DialogTitle>Add New Expense</DialogTitle>
                 </DialogHeader>
@@ -304,13 +306,13 @@ export default function Expenses() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Summary */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
+        <Card className="mb-4 sm:mb-6">
+          <CardContent className="pt-4 sm:pt-6">
             <div className="text-center">
-              <p className="text-sm text-gray-600">Total Expenses (Filtered)</p>
-              <p className="text-3xl font-bold text-red-600">
+              <p className="text-xs sm:text-sm text-gray-600">Total Expenses (Filtered)</p>
+              <p className="text-2xl sm:text-3xl font-bold text-red-600">
                 {formatCurrency(totalExpenses)}
               </p>
             </div>
@@ -318,8 +320,8 @@ export default function Expenses() {
         </Card>
 
         {/* Filters */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
+        <Card className="mb-4 sm:mb-6">
+          <CardContent className="pt-4 sm:pt-6">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
                 <div className="relative">
@@ -333,7 +335,7 @@ export default function Expenses() {
                 </div>
               </div>
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-full sm:w-48">
+                <SelectTrigger className="w-full sm:w-40">
                   <SelectValue placeholder="Filter by category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -352,10 +354,72 @@ export default function Expenses() {
         {/* Expenses Table */}
         <Card>
           <CardHeader>
-            <CardTitle>Expenses ({filteredExpenses.length})</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">Expenses ({filteredExpenses.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
+            {/* Mobile Card View */}
+            <div className="block sm:hidden space-y-4">
+              {filteredExpenses.map((expense) => (
+                <Card key={expense.id} className="p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {expense.category}
+                        </span>
+                        <span className="text-xs text-gray-600">
+                          {new Date(expense.date).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900 line-clamp-2">
+                        {expense.description}
+                      </p>
+                    </div>
+                    <div className="text-right ml-2 flex-shrink-0">
+                      <p className="font-medium text-red-600">
+                        {formatCurrency(expense.amount)}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center mt-3">
+                    <div className="text-xs text-gray-600">
+                      {expense.updated_at ? (
+                        <div>
+                          Updated {new Date(expense.updated_at).toLocaleDateString()}
+                          {expense.updated_by_user && (
+                            <span> by {expense.updated_by_user.name}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span>Never updated</span>
+                      )}
+                    </div>
+                    
+                    <div className="flex space-x-1">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => startEdit(expense)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleDeleteExpense(expense.id)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden sm:block overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -379,7 +443,7 @@ export default function Expenses() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <div className="max-w-xs">
+                        <div className="max-w-xs lg:max-w-sm">
                           <p className="text-sm font-medium truncate">{expense.description}</p>
                         </div>
                       </TableCell>
@@ -420,19 +484,20 @@ export default function Expenses() {
                   ))}
                 </TableBody>
               </Table>
-              {filteredExpenses.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  No expenses found matching your criteria.
-                </div>
-              )}
             </div>
+            
+            {filteredExpenses.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                No expenses found matching your criteria.
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
       {/* Edit Expense Dialog */}
       <Dialog open={!!editingExpense} onOpenChange={() => setEditingExpense(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md mx-4">
           <DialogHeader>
             <DialogTitle>Edit Expense</DialogTitle>
           </DialogHeader>
@@ -488,9 +553,9 @@ export default function Expenses() {
               />
             </div>
 
-            <div className="flex space-x-2">
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
               <Button type="submit" className="flex-1">Update Expense</Button>
-              <Button type="button" variant="outline" onClick={() => setEditingExpense(null)}>
+              <Button type="button" variant="outline" onClick={() => setEditingExpense(null)} className="flex-1">
                 Cancel
               </Button>
             </div>

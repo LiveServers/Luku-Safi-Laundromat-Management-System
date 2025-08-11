@@ -163,21 +163,23 @@ export default function Reports() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white shadow-sm border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-4 gap-4">
             <div className="flex items-center">
               <Button 
                 variant="ghost" 
                 onClick={() => router.push('/')}
-                className="mr-4"
+                className="mr-2 sm:mr-4 flex-shrink-0"
+                size="sm"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Dashboard
+                <span className="hidden sm:inline">Back to Dashboard</span>
+                <span className="sm:hidden">Back</span>
               </Button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Monthly Reports</h1>
-                <p className="text-gray-600">Download comprehensive business reports</p>
+              <div className="min-w-0">
+                <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Monthly Reports</h1>
+                <p className="text-sm sm:text-base text-gray-600 hidden sm:block">Download comprehensive business reports</p>
               </div>
             </div>
           </div>
@@ -188,7 +190,7 @@ export default function Reports() {
         {/* Report Filters */}
         <Card className="mb-6">
           <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row gap-4 items-end">
+            <div className="flex flex-row gap-4 items-end flex-wrap sm:flex-nowrap">
               <div className="flex-1">
                 <label className="block text-sm font-medium mb-2">Month</label>
                 <Select value={selectedMonth.toString()} onValueChange={(value) => setSelectedMonth(parseInt(value))}>
