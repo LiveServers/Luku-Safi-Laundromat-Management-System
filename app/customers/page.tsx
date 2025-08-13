@@ -8,7 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Plus, Search, ArrowLeft, Mail, Phone } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { Plus, Search, ArrowLeft, Mail, Phone, Eye, TrendingUp, Calendar, DollarSign } from 'lucide-react';
 
 interface Customer {
   id: string;
@@ -19,11 +22,27 @@ interface Customer {
   created_at: string;
 }
 
+interface CustomerHistory {
+  customer: Customer;
+  orders: any[];
+  analytics: {
+    totalSpent: number;
+    totalOrders: number;
+    averageOrderValue: number;
+    visitFrequency: number;
+    firstVisit: string;
+    lastVisit: string;
+    monthlySpending: Record<string, number>;
+    weeklyVisits: Record<string, number>;
+  };
+}
 export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerHistory | null>(null);
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     name: '',
     email: '',
@@ -91,12 +110,43 @@ export default function Customers() {
     }
   };
 
+  const fetchCustomerHistory = async (customerId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/customers/${customerId}/history`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSelectedCustomer(data);
+        setIsHistoryDialogOpen(true);
+      }
+    } catch (error) {
+      console.error('Error fetching customer history:', error);
+    }
+  };
+
   const filteredCustomers = customers.filter(customer =>
     customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     customer.phone?.includes(searchTerm)
   );
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: 'KES',
+    }).format(amount);
+  };
+
+  const prepareChartData = (data: Record<string, number>) => {
+    return Object.entries(data)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => ({ name: key, value }));
+  };
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -243,8 +293,14 @@ export default function Customers() {
                       <div className="text-xs text-gray-600">
                         {new Date(customer.created_at).toLocaleDateString()}
                       </div>
-                      <Button variant="ghost" size="sm" className="mt-1">
-                        View Orders
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="mt-1"
+                        onClick={() => fetchCustomerHistory(customer.id)}
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        View History
                       </Button>
                     </div>
                   </div>
@@ -298,8 +354,13 @@ export default function Customers() {
                         {new Date(customer.created_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="sm">
-                          View Orders
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => fetchCustomerHistory(customer.id)}
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          View History
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -316,6 +377,208 @@ export default function Customers() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Customer History Dialog */}
+      <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+        <DialogContent className="max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedCustomer?.customer.name} - Customer History
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedCustomer && (
+            <div className="space-y-6">
+              {/* Customer Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="flex items-center">
+                      <DollarSign className="h-8 w-8 text-green-600" />
+                      <div className="ml-4">
+                        <div className="text-2xl font-bold text-green-600">
+                          {formatCurrency(selectedCustomer.analytics.totalSpent)}
+                        </div>
+                        <p className="text-xs text-gray-600">Total Spent</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="flex items-center">
+                      <Calendar className="h-8 w-8 text-blue-600" />
+                      <div className="ml-4">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {selectedCustomer.analytics.totalOrders}
+                        </div>
+                        <p className="text-xs text-gray-600">Total Orders</p>
+                      </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="flex items-center">
+                      <TrendingUp className="h-8 w-8 text-purple-600" />
+                      <div className="ml-4">
+                        <div className="text-2xl font-bold text-purple-600">
+                          {formatCurrency(selectedCustomer.analytics.averageOrderValue)}
+                        </div>
+                        <p className="text-xs text-gray-600">Avg Order</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                    </div>
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="flex items-center">
+                      <Calendar className="h-8 w-8 text-orange-600" />
+                      <div className="ml-4">
+                        <div className="text-2xl font-bold text-orange-600">
+                          {selectedCustomer.analytics.visitFrequency}
+                        </div>
+                        <p className="text-xs text-gray-600">Visits/Month</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              {/* Customer Details */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Customer Information</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">First Visit</p>
+                      <p className="font-medium">
+                        {new Date(selectedCustomer.analytics.firstVisit).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Last Visit</p>
+                      <p className="font-medium">
+                        {selectedCustomer.analytics.lastVisit 
+                          ? new Date(selectedCustomer.analytics.lastVisit).toLocaleDateString()
+                          : 'Never'
+                        }
+                      </p>
+                    </div>
+                    {selectedCustomer.customer.email && (
+                      <div>
+                        <p className="text-sm text-gray-600">Email</p>
+                        <p className="font-medium">{selectedCustomer.customer.email}</p>
+                      </div>
+                    )}
+                    {selectedCustomer.customer.phone && (
+                      <div>
+                        <p className="text-sm text-gray-600">Phone</p>
+                        <p className="font-medium">{selectedCustomer.customer.phone}</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+              {/* Charts and Order History */}
+              <Tabs defaultValue="orders" className="space-y-4">
+                <TabsList>
+                  <TabsTrigger value="orders">Order History</TabsTrigger>
+                  <TabsTrigger value="spending">Monthly Spending</TabsTrigger>
+                  <TabsTrigger value="frequency">Visit Frequency</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="orders">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Recent Orders ({selectedCustomer.orders.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4 max-h-96 overflow-y-auto">
+                        {selectedCustomer.orders.map((order) => (
+                          <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm">{order.service_type}</p>
+                              <p className="text-xs text-gray-600">
+                                {new Date(order.created_at).toLocaleDateString()}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant={order.status === 'completed' ? 'default' : 'secondary'} className="text-xs">
+                                  {order.status}
+                                </Badge>
+                                <Badge variant={order.payment_status === 'paid' ? 'default' : 'secondary'} className="text-xs">
+                                  {order.payment_status}
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="text-right ml-2 flex-shrink-0">
+                              <p className="font-medium">{formatCurrency(order.total_amount)}</p>
+                              {order.discount_amount > 0 && (
+                                <p className="text-xs text-red-600">
+                                  -{formatCurrency(order.discount_amount)} discount
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {selectedCustomer.orders.length === 0 && (
+                          <p className="text-gray-500 text-center py-4">No orders found</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+                
+                <TabsContent value="spending">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Monthly Spending Pattern</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={prepareChartData(selectedCustomer.analytics.monthlySpending)}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis />
+                          <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                          <Line 
+                            type="monotone" 
+                            dataKey="value" 
+                            stroke="#3B82F6" 
+                            strokeWidth={3}
+                            dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+                
+                <TabsContent value="frequency">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Weekly Visit Frequency</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={prepareChartData(selectedCustomer.analytics.weeklyVisits)}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis />
+                          <Tooltip />
+                          <Bar dataKey="value" fill="#10B981" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
