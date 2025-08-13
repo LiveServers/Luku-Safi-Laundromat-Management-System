@@ -37,7 +37,8 @@ export default function Services() {
     price_per_item: '',
     price_per_kg: '',
     requires_weight: false,
-    requires_items: true
+    requires_items: true,
+    name: '',
   });
   const router = useRouter();
 
@@ -101,7 +102,8 @@ export default function Services() {
           price_per_item: '',
           price_per_kg: '',
           requires_weight: false,
-          requires_items: true
+          requires_items: true,
+          name: ''
         });
       }
     } catch (error) {
@@ -133,7 +135,8 @@ export default function Services() {
           price_per_item: '',
           price_per_kg: '',
           requires_weight: false,
-          requires_items: true
+          requires_items: true,
+          name: ''
         });
       }
     } catch (error) {
@@ -167,7 +170,8 @@ export default function Services() {
       price_per_item: service.price_per_item?.toString() || '',
       price_per_kg: service.price_per_kg?.toString() || '',
       requires_weight: service.requires_weight,
-      requires_items: service.requires_items
+      requires_items: service.requires_items,
+      name: service.display_name.replace(/[()]/g, '').replace(/([a-z])([A-Z])/g, '$1-$2').replace(/\s+/g, '-')
     });
   };
 
@@ -229,7 +233,7 @@ export default function Services() {
                     <Input
                       id="display_name"
                       value={newService.display_name}
-                      onChange={(e) => setNewService({...newService, display_name: e.target.value})}
+                      onChange={(e) => setNewService({...newService, display_name: e.target.value, name: e.target.value.replace(/[()]/g, '').replace(/([a-z])([A-Z])/g, '$1-$2').replace(/\s+/g, '-').toLowerCase()})}
                       placeholder="e.g., Single Shirt Ironing"
                       required
                     />
@@ -395,7 +399,7 @@ export default function Services() {
               <Input
                 id="edit_display_name"
                 value={newService.display_name}
-                onChange={(e) => setNewService({...newService, display_name: e.target.value})}
+                onChange={(e) => setNewService({...newService, display_name: e.target.value, name: e.target.value.replace(/[()]/g, '').replace(/([a-z])([A-Z])/g, '$1-$2').replace(/\s+/g, '-').toLowerCase()})}
                 required
               />
             </div>

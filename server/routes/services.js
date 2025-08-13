@@ -97,7 +97,15 @@ router.put('/:id', authenticateToken, requireOwner, async (req, res) => {
   try {
     const { data: service, error } = await supabase
       .from('services')
-      .update(req.body)
+      .update({
+        display_name: req.body.display_name ?? '',
+        base_price: parseFloat(req.body.base_price) || 0,
+        price_per_item: req.body.price_per_item ? parseFloat(req.body.price_per_item) : null,
+        price_per_kg: req.body.price_per_kg ? parseFloat(req.body.price_per_kg) : null,
+        requires_weight: req.body.requires_weight || false,
+        requires_items: req.body.requires_items !== false,
+        name: req.body.name ?? ''
+      })
       .eq('id', req.params.id)
       .select()
       .single();

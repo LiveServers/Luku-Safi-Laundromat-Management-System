@@ -14,7 +14,6 @@ import { Badge } from '@/components/ui/badge';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Plus, Search, ArrowLeft, Edit, Trash2, Check, ChevronsUpDown } from 'lucide-react';
-import { CommandList } from 'cmdk';
 
 interface Customer {
   id: string;
@@ -303,9 +302,11 @@ export default function Orders() {
       discount_reason: order.discount_reason || '',
       total_amount: order.total_amount.toString(),
       payment_status: order.payment_status,
-      notes: order.notes || '',
-      status: order.status || ''
+      status: order.status || '',
+      notes: order.notes || ''
     });
+    setCustomerSearchValue('');
+    setServiceSearchValue('');
   };
 
   const handleDeleteOrder = async (orderId: string) => {
@@ -341,8 +342,8 @@ export default function Orders() {
       discount_reason: '',
       total_amount: '',
       payment_status: 'pending',
-      notes: '',
-      status: ''
+      status: 'received',
+      notes: ''
     });
     setCustomerSearchValue('');
     setServiceSearchValue('');
@@ -445,13 +446,13 @@ export default function Orders() {
                             aria-expanded={customerSearchOpen}
                             className="w-full justify-between"
                           >
-                            {newOrder?.customer_id
+                            {newOrder.customer_id
                               ? customers.find(customer => customer.id === newOrder.customer_id)?.name
                               : "Select customer..."}
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-full p-0">
+                        <PopoverContent className="w-[400px] p-0">
                           <Command>
                             <CommandInput 
                               placeholder="Search customers..." 
@@ -461,33 +462,27 @@ export default function Orders() {
                             <CommandEmpty>No customer found.</CommandEmpty>
                             <CommandGroup className="max-h-64 overflow-y-auto">
                               {customers
-                                .filter(customer => 
-                                  customer.name.toLowerCase().includes(customerSearchValue.toLowerCase()) ||
-                                  customer.email?.toLowerCase().includes(customerSearchValue.toLowerCase()) ||
-                                  customer.phone?.includes(customerSearchValue)
-                                )
-                                ?.map((customer) => (
-                                  <CommandList key={customer.id}>
-                                    <CommandItem
-                                      value={customer.id}
-                                      onSelect={() => {
-                                        setNewOrder({...newOrder, customer_id: customer.id});
-                                        setCustomerSearchOpen(false);
-                                      }}
-                                    >
-                                      <Check
-                                        className={`mr-2 h-4 w-4 ${
-                                          newOrder?.customer_id === customer.id ? "opacity-100" : "opacity-0"
-                                        }`}
-                                      />
-                                      <div>
-                                        <div className="font-medium">{customer.name}</div>
-                                        {customer?.phone && (
-                                          <div className="text-xs text-gray-500">{customer.phone}</div>
-                                        )}
-                                      </div>
-                                    </CommandItem>
-                                  </CommandList>
+                                .map((customer) => (
+                                <CommandItem
+                                  key={customer.id}
+                                  value={customer.name}
+                                  onSelect={() => {
+                                    setNewOrder({...newOrder, customer_id: customer.id});
+                                    setCustomerSearchOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={`mr-2 h-4 w-4 ${
+                                      newOrder.customer_id === customer.id ? "opacity-100" : "opacity-0"
+                                    }`}
+                                  />
+                                  <div>
+                                    <div className="font-medium">{customer.name}</div>
+                                    {customer.phone && (
+                                      <div className="text-xs text-gray-500">{customer.phone}</div>
+                                    )}
+                                  </div>
+                                </CommandItem>
                               ))}
                             </CommandGroup>
                           </Command>
@@ -510,7 +505,7 @@ export default function Orders() {
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-full p-0">
+                        <PopoverContent className="w-[400px] p-0">
                           <Command>
                             <CommandInput 
                               placeholder="Search services..." 
@@ -520,14 +515,10 @@ export default function Orders() {
                             <CommandEmpty>No service found.</CommandEmpty>
                             <CommandGroup className="max-h-64 overflow-y-auto">
                               {services
-                                .filter(service => 
-                                  service.display_name.toLowerCase().includes(serviceSearchValue.toLowerCase()) ||
-                                  service.name.toLowerCase().includes(serviceSearchValue.toLowerCase())
-                                )
                                 .map((service) => (
                                 <CommandItem
                                   key={service.id}
-                                  value={service.id}
+                                  value={service.display_name}
                                   onSelect={() => {
                                     handleServiceChange(service.id);
                                     setServiceSearchOpen(false);
@@ -912,40 +903,46 @@ export default function Orders() {
               {/* Customer Selection */}
               <div className="space-y-2">
                 <Label>Customer</Label>
-                <Popover>
+                <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       role="combobox"
+                      aria-expanded={customerSearchOpen}
                       className="w-full justify-between"
                     >
-                      {newOrder?.customer_id
+                      {newOrder.customer_id
                         ? customers.find(customer => customer.id === newOrder.customer_id)?.name
                         : "Select customer..."}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-full p-0">
+                  <PopoverContent className="w-[400px] p-0">
                     <Command>
-                      <CommandInput placeholder="Search customers..." />
+                      <CommandInput 
+                        placeholder="Search customers..." 
+                        value={customerSearchValue}
+                        onValueChange={setCustomerSearchValue}
+                      />
                       <CommandEmpty>No customer found.</CommandEmpty>
                       <CommandGroup className="max-h-64 overflow-y-auto">
                         {customers.map((customer) => (
                           <CommandItem
                             key={customer.id}
-                            value={customer.id}
+                            value={customer.name}
                             onSelect={() => {
                               setNewOrder({...newOrder, customer_id: customer.id});
+                              setCustomerSearchOpen(false);
                             }}
                           >
                             <Check
                               className={`mr-2 h-4 w-4 ${
-                                newOrder?.customer_id === customer.id ? "opacity-100" : "opacity-0"
+                                newOrder.customer_id === customer.id ? "opacity-100" : "opacity-0"
                               }`}
                             />
                             <div>
                               <div className="font-medium">{customer.name}</div>
-                              {customer?.phone && (
+                              {customer.phone && (
                                 <div className="text-xs text-gray-500">{customer.phone}</div>
                               )}
                             </div>
@@ -960,33 +957,39 @@ export default function Orders() {
               {/* Service Selection */}
               <div className="space-y-2">
                 <Label>Service Type</Label>
-                <Popover>
+                <Popover open={serviceSearchOpen} onOpenChange={setServiceSearchOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       role="combobox"
+                      aria-expanded={serviceSearchOpen}
                       className="w-full justify-between"
                     >
-                      {newOrder?.service_type || "Select service..."}
+                      {newOrder.service_type || "Select service..."}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-full p-0">
+                  <PopoverContent className="w-[400px] p-0">
                     <Command>
-                      <CommandInput placeholder="Search services..." />
+                      <CommandInput 
+                        placeholder="Search services..." 
+                        value={serviceSearchValue}
+                        onValueChange={setServiceSearchValue}
+                      />
                       <CommandEmpty>No service found.</CommandEmpty>
                       <CommandGroup className="max-h-64 overflow-y-auto">
                         {services.map((service) => (
                           <CommandItem
                             key={service.id}
-                            value={service.id}
+                            value={service.display_name}
                             onSelect={() => {
                               handleServiceChange(service.id);
+                              setServiceSearchOpen(false);
                             }}
                           >
                             <Check
                               className={`mr-2 h-4 w-4 ${
-                                newOrder?.service_type === service.display_name ? "opacity-100" : "opacity-0"
+                                newOrder.service_type === service.display_name ? "opacity-100" : "opacity-0"
                               }`}
                             />
                             <div>
@@ -1079,7 +1082,24 @@ export default function Orders() {
               {/* Status */}
               <div className="space-y-2">
                 <Label>Order Status</Label>
-                <Select value={newOrder.payment_status} onValueChange={(value) => setNewOrder({...newOrder, status: value})}>
+                <Select value={newOrder.status || 'received'} onValueChange={(value) => setNewOrder({...newOrder, status: value})}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {orderStatuses.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status.charAt(0).toUpperCase() + status.slice(1)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Order Status */}
+              <div className="space-y-2">
+                <Label>Order Status</Label>
+                <Select value={newOrder.status || 'received'} onValueChange={(value) => setNewOrder({...newOrder, status: value})}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
