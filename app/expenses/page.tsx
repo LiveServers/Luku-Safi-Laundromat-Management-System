@@ -24,6 +24,7 @@ interface Expense {
     id: string;
     name: string;
   };
+  transaction_code?: string;
 }
 
 export default function Expenses() {
@@ -37,7 +38,8 @@ export default function Expenses() {
     category: '',
     description: '',
     amount: '',
-    date: new Date().toISOString().split('T')[0]
+    date: new Date().toISOString().split('T')[0],
+    transaction_code: ''
   });
   const router = useRouter();
 
@@ -115,7 +117,8 @@ export default function Expenses() {
           category: '',
           description: '',
           amount: '',
-          date: new Date().toISOString().split('T')[0]
+          date: new Date().toISOString().split('T')[0],
+          transaction_code: ''
         });
       }
     } catch (error) {
@@ -145,7 +148,8 @@ export default function Expenses() {
           category: '',
           description: '',
           amount: '',
-          date: new Date().toISOString().split('T')[0]
+          date: new Date().toISOString().split('T')[0],
+          transaction_code: ''
         });
       }
     } catch (error) {
@@ -159,7 +163,8 @@ export default function Expenses() {
       category: expense.category,
       description: expense.description,
       amount: expense.amount.toString(),
-      date: expense.date
+      date: expense.date,
+      transaction_code: expense.transaction_code || ''
     });
   };
 
@@ -297,6 +302,16 @@ export default function Expenses() {
                     />
                   </div>
 
+                  <div className="space-y-2">
+                    <Label htmlFor="transaction_code">Transaction Code (Optional)</Label>
+                    <Input
+                      id="transaction_code"
+                      value={newExpense.transaction_code}
+                      onChange={(e) => setNewExpense({...newExpense, transaction_code: e.target.value})}
+                      placeholder="e.g., TXN123456, MPESA-ABC123"
+                    />
+                  </div>
+
                   <Button type="submit" className="w-full">Add Expense</Button>
                 </form>
                 </div>
@@ -379,6 +394,11 @@ export default function Expenses() {
                       <p className="font-medium text-red-600">
                         {formatCurrency(expense.amount)}
                       </p>
+                      {expense.transaction_code && (
+                        <div className="text-xs text-blue-600 mt-1">
+                          {expense.transaction_code}
+                        </div>
+                      )}
                     </div>
                   </div>
                   
@@ -426,6 +446,7 @@ export default function Expenses() {
                     <TableHead>Date</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Description</TableHead>
+                    <TableHead>Transaction</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Last Updated</TableHead>
                     <TableHead>Actions</TableHead>
@@ -446,6 +467,13 @@ export default function Expenses() {
                         <div className="max-w-xs lg:max-w-sm">
                           <p className="text-sm font-medium truncate">{expense.description}</p>
                         </div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {expense.transaction_code ? (
+                          <span className="text-blue-600">{expense.transaction_code}</span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
                       </TableCell>
                       <TableCell className="font-medium text-red-600">
                         {formatCurrency(expense.amount)}
@@ -550,6 +578,16 @@ export default function Expenses() {
                 value={newExpense.date}
                 onChange={(e) => setNewExpense({...newExpense, date: e.target.value})}
                 required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit_transaction_code">Transaction Code</Label>
+              <Input
+                id="edit_transaction_code"
+                value={newExpense.transaction_code}
+                onChange={(e) => setNewExpense({...newExpense, transaction_code: e.target.value})}
+                placeholder="e.g., TXN123456, MPESA-ABC123"
               />
             </div>
 
