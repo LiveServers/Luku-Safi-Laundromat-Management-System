@@ -31,7 +31,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // Create expense
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { category, description, amount, date } = req.body;
+    const { category, description, amount, date, transaction_code } = req.body;
 
     const { data: expense, error } = await supabase
       .from('expenses')
@@ -40,7 +40,8 @@ router.post('/', authenticateToken, async (req, res) => {
           category,
           description,
           amount: parseFloat(amount),
-          date: date || new Date().toISOString().split('T')[0]
+          date: date || new Date().toISOString().split('T')[0],
+          transaction_code
         }
       ])
       .select()

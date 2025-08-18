@@ -53,6 +53,8 @@ interface Order {
     id: string;
     name: string;
   };
+  order_date?: string;
+  transaction_code?: string;
 }
 
 export default function Orders() {
@@ -72,6 +74,7 @@ export default function Orders() {
   const [newOrder, setNewOrder] = useState({
     customer_id: '',
     service_type: '',
+    order_date: new Date().toISOString().split('T')[0],
     weight: '',
     items: '',
     subtotal: '',
@@ -79,6 +82,7 @@ export default function Orders() {
     discount_reason: '',
     total_amount: '',
     payment_status: 'pending',
+    transaction_code: '',
     notes: '',
     status: ''
   });
@@ -295,6 +299,7 @@ export default function Orders() {
     setNewOrder({
       customer_id: order.customer_id,
       service_type: order.service_type,
+      order_date: order.order_date || new Date(order.created_at).toISOString().split('T')[0],
       weight: order.weight.toString(),
       items: order.items.toString(),
       subtotal: order.subtotal.toString(),
@@ -302,7 +307,8 @@ export default function Orders() {
       discount_reason: order.discount_reason || '',
       total_amount: order.total_amount.toString(),
       payment_status: order.payment_status,
-      status: order.status || '',
+      status: order.status,
+      transaction_code: order.transaction_code || '',
       notes: order.notes || ''
     });
     setCustomerSearchValue('');
@@ -335,6 +341,7 @@ export default function Orders() {
     setNewOrder({
       customer_id: '',
       service_type: '',
+      order_date: new Date().toISOString().split('T')[0],
       weight: '',
       items: '',
       subtotal: '',
@@ -343,6 +350,7 @@ export default function Orders() {
       total_amount: '',
       payment_status: 'pending',
       status: 'received',
+      transaction_code: '',
       notes: ''
     });
     setCustomerSearchValue('');
@@ -545,6 +553,18 @@ export default function Orders() {
                       </Popover>
                     </div>
 
+                    {/* Order Date */}
+                    <div className="space-y-2">
+                      <Label htmlFor="order_date">Order Date</Label>
+                      <Input
+                        id="order_date"
+                        type="date"
+                        value={newOrder.order_date}
+                        onChange={(e) => setNewOrder({...newOrder, order_date: e.target.value})}
+                        required
+                      />
+                    </div>
+
                     {/* Weight and Items */}
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -633,6 +653,17 @@ export default function Orders() {
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+
+                    {/* Transaction Code */}
+                    <div className="space-y-2">
+                      <Label htmlFor="transaction_code">Transaction Code (Optional)</Label>
+                      <Input
+                        id="transaction_code"
+                        value={newOrder.transaction_code}
+                        onChange={(e) => setNewOrder({...newOrder, transaction_code: e.target.value})}
+                        placeholder="e.g., TXN123456, MPESA-ABC123"
+                      />
                     </div>
 
                     {/* Notes */}
@@ -736,8 +767,13 @@ export default function Orders() {
                         </div>
                       )}
                       <div className="text-xs text-gray-600 mt-1">
-                        {new Date(order.created_at).toLocaleDateString()}
+                        {new Date(order.order_date || order.created_at).toLocaleDateString()}
                       </div>
+                      {order.transaction_code && (
+                        <div className="text-xs text-blue-600 mt-1">
+                          {order.transaction_code}
+                        </div>
+                      )}
                     </div>
                   </div>
                   
@@ -786,6 +822,7 @@ export default function Orders() {
                     <TableHead>Customer</TableHead>
                     <TableHead>Service</TableHead>
                     <TableHead>Details</TableHead>
+                    <TableHead>Date</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Payment</TableHead>
@@ -814,6 +851,12 @@ export default function Orders() {
                           {order.weight > 0 && <div>{order.weight}kg</div>}
                           {order.items > 0 && <div>{order.items} items</div>}
                         </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600">
+                        <div>{new Date(order.order_date || order.created_at).toLocaleDateString()}</div>
+                        {order.transaction_code && (
+                          <div className="text-xs text-blue-600">{order.transaction_code}</div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="font-medium text-green-600">
@@ -844,7 +887,7 @@ export default function Orders() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-gray-600">
-                        {new Date(order.created_at).toLocaleDateString()}
+                        {new Date(order.order_date || order.created_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-sm text-gray-600">
                         {order.updated_at ? (
@@ -1008,6 +1051,18 @@ export default function Orders() {
                 </Popover>
               </div>
 
+              {/* Order Date */}
+              <div className="space-y-2">
+                <Label htmlFor="edit_order_date">Order Date</Label>
+                <Input
+                  id="edit_order_date"
+                  type="date"
+                  value={newOrder.order_date}
+                  onChange={(e) => setNewOrder({...newOrder, order_date: e.target.value})}
+                  required
+                />
+              </div>
+
               {/* Weight and Items */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -1128,6 +1183,17 @@ export default function Orders() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Transaction Code */}
+              <div className="space-y-2">
+                <Label htmlFor="edit_transaction_code">Transaction Code</Label>
+                <Input
+                  id="edit_transaction_code"
+                  value={newOrder.transaction_code}
+                  onChange={(e) => setNewOrder({...newOrder, transaction_code: e.target.value})}
+                  placeholder="e.g., TXN123456, MPESA-ABC123"
+                />
               </div>
 
               {/* Notes */}

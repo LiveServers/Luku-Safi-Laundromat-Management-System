@@ -71,6 +71,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const {
       customer_id,
       service_type,
+      order_date,
       weight,
       items,
       subtotal,
@@ -78,6 +79,7 @@ router.post('/', authenticateToken, async (req, res) => {
       discount_reason,
       total_amount,
       payment_status,
+      transaction_code,
       notes
     } = req.body;
 
@@ -87,6 +89,7 @@ router.post('/', authenticateToken, async (req, res) => {
         {
           customer_id,
           service_type,
+          order_date: order_date || new Date().toISOString().split('T')[0],
           weight: parseFloat(weight),
           items: parseInt(items),
           subtotal: parseFloat(subtotal),
@@ -95,6 +98,7 @@ router.post('/', authenticateToken, async (req, res) => {
           total_amount: parseFloat(total_amount),
           payment_status: payment_status || 'pending',
           status: 'received',
+          transaction_code,
           notes
         }
       ])
