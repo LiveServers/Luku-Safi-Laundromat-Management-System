@@ -1,5 +1,5 @@
 const express = require('express');
-const supabase = require('../config/database');
+const db = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -8,56 +8,65 @@ const router = express.Router();
 router.get('/dashboard', authenticateToken, async (req, res) => {
   try {
     // Get total revenue
-    const { data: revenueData } = await supabase
-      .from('orders')
-      .select('total_amount')
-      .eq('payment_status', 'paid');
-
-    const totalRevenue = revenueData?.reduce((sum, order) => sum + order.total_amount, 0) || 0;
+    const revenueResult = await db.query(
+      "SELECT SUM(total_amount) as total_revenue FROM orders WHERE payment_status = 'paid'"
+    );
+    const totalRevenue = parseFloat(revenueResult.rows[0].total_revenue) || 0;
 
     // Get total expenses
-    const { data: expenseData } = await supabase
-      .from('expenses')
-      .select('amount');
-
-    const totalExpenses = expenseData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
+    const expenseResult = await db.query(
+      'SELECT SUM(amount) as total_expenses FROM expenses'
+    );
+    const totalExpenses = parseFloat(expenseResult.rows[0].total_expenses) || 0;
 
     // Get orders count
-    const { count: totalOrders } = await supabase
-      .from('orders')
-      .select('*', { count: 'exact', head: true });
+    const ordersCountResult = await db.query('SELECT COUNT(*) as count FROM orders');
+    const totalOrders = parseInt(ordersCountResult.rows[0].count) || 0;
 
     // Get customers count
-    const { count: totalCustomers } = await supabase
-      .from('customers')
-      .select('*', { count: 'exact', head: true });
+    const customersCountResult = await db.query('SELECT COUNT(*) as count FROM customers');
+    const totalCustomers = parseInt(customersCountResult.rows[0].count) || 0;
 
     // Get pending orders
-    const { count: pendingOrders } = await supabase
-      .from('orders')
-      .select('*', { count: 'exact', head: true })
-      .in('status', ['received', 'processing']);
+    const pendingOrdersResult = await db.query(
+      "SELECT COUNT(*) as count FROM orders WHERE status IN ('received', 'processing')"
+    );
+    const pendingOrders = parseInt(pendingOrdersResult.rows[0].count) || 0;
 
     // Get recent orders
-    const { data: recentOrders } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        customers (name)
-      `)
-      .order('created_at', { ascending: false })
-      .limit(5);
+    const recentOrdersResult = await db.query(`
+      SELECT 
+        o.*,
+        c.name as customer_name
+      FROM orders o
+      LEFT JOIN customers c ON o.customer_id = c.id
+      ORDER BY o.created_at DESC
+      LIMIT 5
+    `);
+
+    const recentOrders = recentOrdersResult.rows.map(row => ({
+      id: row.id,
+      customer_id: row.customer_id,
+      service_type: row.service_type,
+      total_amount: parseFloat(row.total_amount),
+      discount_amount: parseFloat(row.discount_amount),
+      payment_status: row.payment_status,
+      status: row.status,
+      created_at: row.created_at,
+      customers: row.customer_name ? { name: row.customer_name } : null
+    }));
 
     res.json({
       totalRevenue,
       totalExpenses,
       profit: totalRevenue - totalExpenses,
-      totalOrders: totalOrders || 0,
-      totalCustomers: totalCustomers || 0,
-      pendingOrders: pendingOrders || 0,
-      recentOrders: recentOrders || []
+      totalOrders,
+      totalCustomers,
+      pendingOrders,
+      recentOrders
     });
   } catch (error) {
+    console.error('Dashboard analytics error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -65,30 +74,24 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
 // Get revenue chart data
 router.get('/revenue-chart', authenticateToken, async (req, res) => {
   try {
-    const { data: orders, error } = await supabase
-      .from('orders')
-      .select('total_amount, created_at')
-      .eq('payment_status', 'paid')
-      .order('created_at', { ascending: true });
+    const result = await db.query(`
+      SELECT 
+        DATE_TRUNC('month', created_at) as month,
+        SUM(total_amount) as revenue
+      FROM orders 
+      WHERE payment_status = 'paid'
+      GROUP BY DATE_TRUNC('month', created_at)
+      ORDER BY month
+    `);
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    // Group by month
-    const monthlyRevenue = {};
-    orders.forEach(order => {
-      const month = new Date(order.created_at).toISOString().slice(0, 7);
-      monthlyRevenue[month] = (monthlyRevenue[month] || 0) + order.total_amount;
-    });
-
-    const chartData = Object.entries(monthlyRevenue).map(([month, revenue]) => ({
-      month,
-      revenue
+    const chartData = result.rows.map(row => ({
+      month: row.month.toISOString().slice(0, 7),
+      revenue: parseFloat(row.revenue)
     }));
 
     res.json(chartData);
   } catch (error) {
+    console.error('Revenue chart error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -96,28 +99,23 @@ router.get('/revenue-chart', authenticateToken, async (req, res) => {
 // Get expenses chart data
 router.get('/expenses-chart', authenticateToken, async (req, res) => {
   try {
-    const { data: expenses, error } = await supabase
-      .from('expenses')
-      .select('amount, category, date')
-      .order('date', { ascending: true });
+    const result = await db.query(`
+      SELECT 
+        category,
+        SUM(amount) as amount
+      FROM expenses
+      GROUP BY category
+      ORDER BY amount DESC
+    `);
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    // Group by category
-    const categoryExpenses = {};
-    expenses.forEach(expense => {
-      categoryExpenses[expense.category] = (categoryExpenses[expense.category] || 0) + expense.amount;
-    });
-
-    const chartData = Object.entries(categoryExpenses).map(([category, amount]) => ({
-      category,
-      amount
+    const chartData = result.rows.map(row => ({
+      category: row.category,
+      amount: parseFloat(row.amount)
     }));
 
     res.json(chartData);
   } catch (error) {
+    console.error('Expenses chart error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -130,51 +128,56 @@ router.get('/monthly-report', authenticateToken, async (req, res) => {
     const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
     // Get orders for the month
-    const { data: orders } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        customers (id, name, created_at)
-      `)
-      .gte('created_at', startDate)
-      .lte('created_at', endDate + 'T23:59:59');
+    const ordersResult = await db.query(`
+      SELECT 
+        o.*,
+        c.id as customer_id,
+        c.name as customer_name,
+        c.created_at as customer_created_at
+      FROM orders o
+      LEFT JOIN customers c ON o.customer_id = c.id
+      WHERE o.created_at >= $1 AND o.created_at <= $2
+    `, [startDate, endDate + 'T23:59:59']);
 
     // Get expenses for the month
-    const { data: expenses } = await supabase
-      .from('expenses')
-      .select('*')
-      .gte('date', startDate)
-      .lte('date', endDate);
+    const expensesResult = await db.query(
+      'SELECT * FROM expenses WHERE date >= $1 AND date <= $2',
+      [startDate, endDate]
+    );
+
+    const orders = ordersResult.rows;
+    const expenses = expensesResult.rows;
 
     // Calculate revenue
-    const revenue = orders?.filter(o => o.payment_status === 'paid')
-      .reduce((sum, order) => sum + order.total_amount, 0) || 0;
+    const revenue = orders
+      .filter(o => o.payment_status === 'paid')
+      .reduce((sum, order) => sum + parseFloat(order.total_amount), 0);
 
     // Calculate total expenses
-    const totalExpenses = expenses?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
+    const totalExpenses = expenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
 
     // Get new vs returning customers
-    const customerIds = [...new Set(orders?.map(o => o.customer_id))];
+    const customerIds = [...new Set(orders.map(o => o.customer_id))];
     const newCustomers = [];
     const returningCustomers = [];
 
     for (const customerId of customerIds) {
-      const customer = orders?.find(o => o.customer_id === customerId)?.customers;
-      if (customer) {
-        const customerCreatedMonth = new Date(customer.created_at).getMonth() + 1;
-        const customerCreatedYear = new Date(customer.created_at).getFullYear();
+      const customer = orders.find(o => o.customer_id === customerId);
+      if (customer && customer.customer_created_at) {
+        const customerCreatedMonth = new Date(customer.customer_created_at).getMonth() + 1;
+        const customerCreatedYear = new Date(customer.customer_created_at).getFullYear();
         
         if (customerCreatedMonth == month && customerCreatedYear == year) {
-          newCustomers.push(customer);
+          newCustomers.push({ id: customerId, name: customer.customer_name });
         } else {
-          returningCustomers.push(customer);
+          returningCustomers.push({ id: customerId, name: customer.customer_name });
         }
       }
     }
 
     // Customer frequency
     const customerFrequency = {};
-    orders?.forEach(order => {
+    orders.forEach(order => {
       const customerId = order.customer_id;
       customerFrequency[customerId] = (customerFrequency[customerId] || 0) + 1;
     });
@@ -189,9 +192,10 @@ router.get('/monthly-report', authenticateToken, async (req, res) => {
       newCustomers: newCustomers.length,
       returningCustomers: returningCustomers.length,
       customerFrequency,
-      totalOrders: orders?.length || 0
+      totalOrders: orders.length
     });
   } catch (error) {
+    console.error('Monthly report error:', error);
     res.status(500).json({ error: error.message });
   }
 });
