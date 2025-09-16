@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const supabase = require('../config/database');
+const db = require('../config/database');
 
 const router = express.Router();
 
@@ -15,13 +15,12 @@ router.post('/register', async (req, res) => {
     }
 
     // Check if user already exists
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .single();
+    const existingUser = await db.query(
+      'SELECT id FROM users WHERE email = $1',
+      [email]
+    );
 
-    if (existingUser) {
+    if (existingUser.rows.length > 0) {
       return res.status(400).json({ error: 'User already exists' });
     }
 
@@ -29,22 +28,12 @@ router.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create user
-    const { data: user, error } = await supabase
-      .from('users')
-      .insert([
-        {
-          email,
-          password: hashedPassword,
-          name,
-          role
-        }
-      ])
-      .select()
-      .single();
+    const result = await db.query(
+      'INSERT INTO users (email, password, name, role) VALUES ($1, $2, $3, $4) RETURNING id, email, name, role',
+      [email, hashedPassword, name, role]
+    );
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
+    const user = result.rows[0];
 
     // Generate JWT
     const token = jwt.sign(
@@ -64,6 +53,7 @@ router.post('/register', async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Register error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -78,15 +68,16 @@ router.post('/login', async (req, res) => {
     }
 
     // Find user
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .single();
+    const result = await db.query(
+      'SELECT * FROM users WHERE email = $1',
+      [email]
+    );
 
-    if (error || !user) {
+    if (result.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+
+    const user = result.rows[0];
 
     // Check password
     const isValidPassword = await bcrypt.compare(password, user.password);
@@ -112,6 +103,7 @@ router.post('/login', async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -129,13 +121,12 @@ router.post('/add-user', async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     // Verify user is owner
-    const { data: currentUser } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', decoded.userId)
-      .single();
+    const currentUserResult = await db.query(
+      'SELECT role FROM users WHERE id = $1',
+      [decoded.userId]
+    );
 
-    if (!currentUser || currentUser.role !== 'owner') {
+    if (currentUserResult.rows.length === 0 || currentUserResult.rows[0].role !== 'owner') {
       return res.status(403).json({ error: 'Only owners can add users' });
     }
 
@@ -146,13 +137,12 @@ router.post('/add-user', async (req, res) => {
     }
 
     // Check if user already exists
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .single();
+    const existingUser = await db.query(
+      'SELECT id FROM users WHERE email = $1',
+      [email]
+    );
 
-    if (existingUser) {
+    if (existingUser.rows.length > 0) {
       return res.status(400).json({ error: 'User already exists' });
     }
 
@@ -160,28 +150,19 @@ router.post('/add-user', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create user
-    const { data: user, error } = await supabase
-      .from('users')
-      .insert([
-        {
-          email,
-          password: hashedPassword,
-          name,
-          role
-        }
-      ])
-      .select('id, email, name, role, created_at')
-      .single();
+    const result = await db.query(
+      'INSERT INTO users (email, password, name, role) VALUES ($1, $2, $3, $4) RETURNING id, email, name, role, created_at',
+      [email, hashedPassword, name, role]
+    );
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
+    const user = result.rows[0];
 
     res.status(201).json({
       message: 'User created successfully',
       user
     });
   } catch (error) {
+    console.error('Add user error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -199,27 +180,22 @@ router.get('/users', async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     // Verify user is owner
-    const { data: currentUser } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', decoded.userId)
-      .single();
+    const currentUserResult = await db.query(
+      'SELECT role FROM users WHERE id = $1',
+      [decoded.userId]
+    );
 
-    if (!currentUser || currentUser.role !== 'owner') {
+    if (currentUserResult.rows.length === 0 || currentUserResult.rows[0].role !== 'owner') {
       return res.status(403).json({ error: 'Only owners can view users' });
     }
 
-    const { data: users, error } = await supabase
-      .from('users')
-      .select('id, email, name, role, created_at')
-      .order('created_at', { ascending: false });
+    const result = await db.query(
+      'SELECT id, email, name, role, created_at FROM users ORDER BY created_at DESC'
+    );
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    res.json(users);
+    res.json(result.rows);
   } catch (error) {
+    console.error('Get users error:', error);
     res.status(500).json({ error: error.message });
   }
 });

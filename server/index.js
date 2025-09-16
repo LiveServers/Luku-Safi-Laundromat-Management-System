@@ -12,13 +12,12 @@ const analyticsRoutes = require('./routes/analytics');
 const servicesRoutes = require('./routes/services');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 
 // Middleware
-app.use(helmet());
+// app.use(helmet());
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
-  credentials: true
+  origin: "*",
 }));
 app.use(morgan('combined'));
 app.use(express.json());
@@ -48,8 +47,8 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen('5000', () => {
+  console.log(`Server running on port 5000`);
 });
 
 module.exports = app;

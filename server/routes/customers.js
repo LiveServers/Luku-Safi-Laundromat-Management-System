@@ -1,5 +1,5 @@
 const express = require('express');
-const supabase = require('../config/database');
+const db = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -7,17 +7,13 @@ const router = express.Router();
 // Get all customers
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { data: customers, error } = await supabase
-      .from('customers')
-      .select('*')
-      .order('name');
+    const result = await db.query(
+      'SELECT * FROM customers ORDER BY name'
+    );
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    res.json(customers);
+    res.json(result.rows);
   } catch (error) {
+    console.error('Get customers error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -28,47 +24,45 @@ router.get('/:id/history', authenticateToken, async (req, res) => {
     const customerId = req.params.id;
     
     // Get customer details
-    const { data: customer, error: customerError } = await supabase
-      .from('customers')
-      .select('*')
-      .eq('id', customerId)
-      .single();
+    const customerResult = await db.query(
+      'SELECT * FROM customers WHERE id = $1',
+      [customerId]
+    );
 
-    if (customerError || !customer) {
+    if (customerResult.rows.length === 0) {
       return res.status(404).json({ error: 'Customer not found' });
     }
 
-    // Get all orders for this customer
-    const { data: orders, error: ordersError } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('customer_id', customerId)
-      .order('created_at', { ascending: false });
+    const customer = customerResult.rows[0];
 
-    if (ordersError) {
-      return res.status(400).json({ error: ordersError.message });
-    }
+    // Get all orders for this customer
+    const ordersResult = await db.query(
+      'SELECT * FROM orders WHERE customer_id = $1 ORDER BY created_at DESC',
+      [customerId]
+    );
+
+    const orders = ordersResult.rows;
 
     // Calculate analytics
-    const totalSpent = orders?.reduce((sum, order) => sum + order.total_amount, 0) || 0;
-    const totalOrders = orders?.length || 0;
+    const totalSpent = orders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0);
+    const totalOrders = orders.length;
     const averageOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
     
     // Calculate monthly spending
     const monthlySpending = {};
     const weeklyVisits = {};
     
-    orders?.forEach(order => {
+    orders.forEach(order => {
       const orderDate = new Date(order.created_at);
       const monthKey = `${orderDate.getFullYear()}-${(orderDate.getMonth() + 1).toString().padStart(2, '0')}`;
       const weekKey = getWeekKey(orderDate);
       
-      monthlySpending[monthKey] = (monthlySpending[monthKey] || 0) + order.total_amount;
+      monthlySpending[monthKey] = (monthlySpending[monthKey] || 0) + parseFloat(order.total_amount);
       weeklyVisits[weekKey] = (weeklyVisits[weekKey] || 0) + 1;
     });
 
     // Calculate frequency (visits per month)
-    const firstVisit = orders?.length > 0 ? new Date(orders[orders.length - 1].created_at) : new Date();
+    const firstVisit = orders.length > 0 ? new Date(orders[orders.length - 1].created_at) : new Date();
     const monthsSinceFirst = Math.max(1, Math.ceil((new Date() - firstVisit) / (1000 * 60 * 60 * 24 * 30)));
     const visitFrequency = totalOrders / monthsSinceFirst;
 
@@ -81,12 +75,13 @@ router.get('/:id/history', authenticateToken, async (req, res) => {
         averageOrderValue,
         visitFrequency: Math.round(visitFrequency * 10) / 10, // Round to 1 decimal
         firstVisit: firstVisit.toISOString(),
-        lastVisit: orders?.length > 0 ? orders[0].created_at : null,
+        lastVisit: orders.length > 0 ? orders[0].created_at : null,
         monthlySpending,
         weeklyVisits
       }
     });
   } catch (error) {
+    console.error('Get customer history error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -111,18 +106,14 @@ router.post('/', authenticateToken, async (req, res) => {
   try {
     const { name, email, phone, address } = req.body;
 
-    const { data: customer, error } = await supabase
-      .from('customers')
-      .insert([{ name, email, phone, address }])
-      .select()
-      .single();
+    const result = await db.query(
+      'INSERT INTO customers (name, email, phone, address) VALUES ($1, $2, $3, $4) RETURNING *',
+      [name, email, phone, address]
+    );
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    res.status(201).json(customer);
+    res.status(201).json(result.rows[0]);
   } catch (error) {
+    console.error('Create customer error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -130,19 +121,20 @@ router.post('/', authenticateToken, async (req, res) => {
 // Update customer
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { data: customer, error } = await supabase
-      .from('customers')
-      .update(req.body)
-      .eq('id', req.params.id)
-      .select()
-      .single();
+    const { name, email, phone, address } = req.body;
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
+    const result = await db.query(
+      'UPDATE customers SET name = $1, email = $2, phone = $3, address = $4 WHERE id = $5 RETURNING *',
+      [name, email, phone, address, req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Customer not found' });
     }
 
-    res.json(customer);
+    res.json(result.rows[0]);
   } catch (error) {
+    console.error('Update customer error:', error);
     res.status(500).json({ error: error.message });
   }
 });

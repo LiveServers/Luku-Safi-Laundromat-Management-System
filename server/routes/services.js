@@ -1,5 +1,5 @@
 const express = require('express');
-const supabase = require('../config/database');
+const db = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -15,18 +15,13 @@ const requireOwner = (req, res, next) => {
 // Get all active services (accessible to all authenticated users)
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { data: services, error } = await supabase
-      .from('services')
-      .select('*')
-      .eq('is_active', true)
-      .order('display_name');
+    const result = await db.query(
+      'SELECT * FROM services WHERE is_active = true ORDER BY display_name'
+    );
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    res.json(services);
+    res.json(result.rows);
   } catch (error) {
+    console.error('Get services error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -34,17 +29,13 @@ router.get('/', authenticateToken, async (req, res) => {
 // Get all services including inactive (owner only)
 router.get('/all', authenticateToken, requireOwner, async (req, res) => {
   try {
-    const { data: services, error } = await supabase
-      .from('services')
-      .select('*')
-      .order('display_name');
+    const result = await db.query(
+      'SELECT * FROM services ORDER BY display_name'
+    );
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    res.json(services);
+    res.json(result.rows);
   } catch (error) {
+    console.error('Get all services error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -53,7 +44,6 @@ router.get('/all', authenticateToken, requireOwner, async (req, res) => {
 router.post('/', authenticateToken, requireOwner, async (req, res) => {
   try {
     const {
-      name,
       display_name,
       base_price,
       price_per_item,
@@ -62,32 +52,31 @@ router.post('/', authenticateToken, requireOwner, async (req, res) => {
       requires_items
     } = req.body;
 
-    if (!name || !display_name) {
-      return res.status(400).json({ error: 'Name and display name are required' });
+    if (!display_name) {
+      return res.status(400).json({ error: 'Display name is required' });
     }
 
-    const { data: service, error } = await supabase
-      .from('services')
-      .insert([
-        {
-          name: name.toLowerCase().replace(/\s+/g, '-'),
-          display_name,
-          base_price: parseFloat(base_price) || 0,
-          price_per_item: price_per_item ? parseFloat(price_per_item) : null,
-          price_per_kg: price_per_kg ? parseFloat(price_per_kg) : null,
-          requires_weight: requires_weight || false,
-          requires_items: requires_items !== false
-        }
-      ])
-      .select()
-      .single();
+    const name = display_name.toLowerCase().replace(/\s+/g, '-');
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
+    const result = await db.query(`
+      INSERT INTO services (
+        name, display_name, base_price, price_per_item, price_per_kg, 
+        requires_weight, requires_items
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `, [
+      name,
+      display_name,
+      parseFloat(base_price) || 0,
+      price_per_item ? parseFloat(price_per_item) : null,
+      price_per_kg ? parseFloat(price_per_kg) : null,
+      requires_weight || false,
+      requires_items !== false
+    ]);
 
-    res.status(201).json(service);
+    res.status(201).json(result.rows[0]);
   } catch (error) {
+    console.error('Create service error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -95,27 +84,42 @@ router.post('/', authenticateToken, requireOwner, async (req, res) => {
 // Update service (owner only)
 router.put('/:id', authenticateToken, requireOwner, async (req, res) => {
   try {
-    const { data: service, error } = await supabase
-      .from('services')
-      .update({
-        display_name: req.body.display_name ?? '',
-        base_price: parseFloat(req.body.base_price) || 0,
-        price_per_item: req.body.price_per_item ? parseFloat(req.body.price_per_item) : null,
-        price_per_kg: req.body.price_per_kg ? parseFloat(req.body.price_per_kg) : null,
-        requires_weight: req.body.requires_weight || false,
-        requires_items: req.body.requires_items !== false,
-        name: req.body.name ?? ''
-      })
-      .eq('id', req.params.id)
-      .select()
-      .single();
+    const {
+      display_name,
+      base_price,
+      price_per_item,
+      price_per_kg,
+      requires_weight,
+      requires_items
+    } = req.body;
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
+    const result = await db.query(`
+      UPDATE services SET 
+        display_name = $1,
+        base_price = $2,
+        price_per_item = $3,
+        price_per_kg = $4,
+        requires_weight = $5,
+        requires_items = $6
+      WHERE id = $7
+      RETURNING *
+    `, [
+      display_name,
+      parseFloat(base_price) || 0,
+      price_per_item ? parseFloat(price_per_item) : null,
+      price_per_kg ? parseFloat(price_per_kg) : null,
+      requires_weight || false,
+      requires_items !== false,
+      req.params.id
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Service not found' });
     }
 
-    res.json(service);
+    res.json(result.rows[0]);
   } catch (error) {
+    console.error('Update service error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -123,29 +127,23 @@ router.put('/:id', authenticateToken, requireOwner, async (req, res) => {
 // Toggle service active status (owner only)
 router.patch('/:id/toggle', authenticateToken, requireOwner, async (req, res) => {
   try {
-    const { data: currentService } = await supabase
-      .from('services')
-      .select('is_active')
-      .eq('id', req.params.id)
-      .single();
+    const currentResult = await db.query(
+      'SELECT is_active FROM services WHERE id = $1',
+      [req.params.id]
+    );
 
-    if (!currentService) {
+    if (currentResult.rows.length === 0) {
       return res.status(404).json({ error: 'Service not found' });
     }
 
-    const { data: service, error } = await supabase
-      .from('services')
-      .update({ is_active: !currentService.is_active })
-      .eq('id', req.params.id)
-      .select()
-      .single();
+    const result = await db.query(
+      'UPDATE services SET is_active = $1 WHERE id = $2 RETURNING *',
+      [!currentResult.rows[0].is_active, req.params.id]
+    );
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    res.json(service);
+    res.json(result.rows[0]);
   } catch (error) {
+    console.error('Toggle service error:', error);
     res.status(500).json({ error: error.message });
   }
 });
