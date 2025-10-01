@@ -3,7 +3,7 @@ const { Pool } = require('pg');
 // Database configuration
 const dbConfig = {
   user: process.env.DB_USER,
-  host: "63.250.54.183",
+  host: process.env.DB_HOST,
   database: process.env.DB_NAME,
   password: process.env.DB_PASSWORD,
   port: process.env.DB_PORT,
