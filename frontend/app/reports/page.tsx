@@ -17,7 +17,7 @@ interface MonthlyReport {
   profit: number;
   newCustomers: number;
   returningCustomers: number;
-  customerFrequency: Record<string, number>;
+  customerFrequency: Record<string, Record<string, number | string>>;
   totalOrders: number;
 }
 
@@ -157,7 +157,6 @@ export default function Reports() {
   ];
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -375,15 +374,14 @@ export default function Reports() {
                 <CardContent>
                   <div className="space-y-2">
                     {Object.entries(report.customerFrequency)
-                      .sort(([,a], [,b]) => (b as number) - (a as number))
+                      .sort(([,a], [,b]) => (b.customerFrequency as number) - (a.customerFrequency as number))
                       .slice(0, 5)
-                      .map(([customerId, frequency]) => {
-                        const customer = report.orders.find(o => o.customer_id === customerId)?.customers;
+                      .map(([customerId, {customerFrequency, customerName}]) => {
                         return (
                           <div key={customerId} className="flex justify-between items-center">
-                            <span className="text-sm">{customer?.name || 'Unknown'}</span>
+                            <span className="text-sm">{customerName || 'Unknown'}</span>
                             <Badge variant="outline">
-                              {frequency} visits
+                              {customerFrequency} visits
                             </Badge>
                           </div>
                         );

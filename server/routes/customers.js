@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
+const { customerFrequencyCalculator } = require('../utils/customerFrequencyCalculator');
 
 const router = express.Router();
 
@@ -42,10 +43,9 @@ router.get('/:id/history', authenticateToken, async (req, res) => {
     );
 
     const orders = ordersResult.rows;
-
     // Calculate analytics
     const totalSpent = orders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0);
-    const totalOrders = orders.length;
+    const totalOrders = customerFrequencyCalculator(orders)[customerId].customerFrequency || 0;
     const averageOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
     
     // Calculate monthly spending
@@ -62,7 +62,7 @@ router.get('/:id/history', authenticateToken, async (req, res) => {
     });
 
     // Calculate frequency (visits per month)
-    const firstVisit = orders.length > 0 ? new Date(orders[orders.length - 1].created_at) : new Date();
+    const firstVisit = orders.length > 0 ? new Date(orders[orders.length - 1].order_date) : new Date();
     const monthsSinceFirst = Math.max(1, Math.ceil((new Date() - firstVisit) / (1000 * 60 * 60 * 24 * 30)));
     const visitFrequency = totalOrders / monthsSinceFirst;
 
@@ -75,7 +75,7 @@ router.get('/:id/history', authenticateToken, async (req, res) => {
         averageOrderValue,
         visitFrequency: Math.round(visitFrequency * 10) / 10, // Round to 1 decimal
         firstVisit: firstVisit.toISOString(),
-        lastVisit: orders.length > 0 ? orders[0].created_at : null,
+        lastVisit: orders.length > 0 ? orders[0].order_date : null,
         monthlySpending,
         weeklyVisits
       }
@@ -105,7 +105,18 @@ function getWeekNumber(date) {
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { name, email, phone, address } = req.body;
+    const customers = await db.query(
+      'SELECT * FROM customers ORDER BY name'
+    );
 
+    if(customers.rows.find(c => c.phone === phone)) {
+      return res.status(400).json({ error: 'Customer with this phone number already exists' });
+    }
+    
+    if(customers.rows.find(c => c.email === email)) {
+      return res.status(400).json({ error: 'Customer with this email already exists' });
+    }
+    
     const result = await db.query(
       'INSERT INTO customers (name, email, phone, address) VALUES ($1, $2, $3, $4) RETURNING *',
       [name, email, phone, address]

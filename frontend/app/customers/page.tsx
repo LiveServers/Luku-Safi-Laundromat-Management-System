@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { Plus, Search, ArrowLeft, Mail, Phone, Eye, TrendingUp, Calendar, DollarSign } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface Customer {
   id: string;
@@ -49,6 +50,7 @@ export default function Customers() {
     phone: '',
     address: ''
   });
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -76,6 +78,7 @@ export default function Customers() {
       }
     } catch (error) {
       console.error('Error fetching customers:', error);
+      setError(error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
@@ -94,7 +97,6 @@ export default function Customers() {
         },
         body: JSON.stringify(newCustomer),
       });
-
       if (response.ok) {
         fetchCustomers();
         setIsCreateDialogOpen(false);
@@ -104,9 +106,15 @@ export default function Customers() {
           phone: '',
           address: ''
         });
+      }else if(response.status === 400){
+        const data = await response.json();
+        setError(data.error || 'Failed to create customer. Please check your input.');
+      }else{
+        setError('Failed to create customer. Please try again.');
       }
     } catch (error) {
       console.error('Error creating customer:', error);
+      setError(error instanceof Error ? error.message : 'Unknown error');
     }
   };
 
@@ -126,6 +134,7 @@ export default function Customers() {
       }
     } catch (error) {
       console.error('Error fetching customer history:', error);
+      setError(error instanceof Error ? error.message : 'Unknown error');
     }
   };
 
@@ -160,6 +169,11 @@ export default function Customers() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+    {error && (
+      <Alert variant="destructive">
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    )}
       {/* Header */}
       <div className="bg-white shadow-sm border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -188,6 +202,11 @@ export default function Customers() {
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-md mx-4">
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
                 <DialogHeader>
                   <DialogTitle>Add New Customer</DialogTitle>
                 </DialogHeader>

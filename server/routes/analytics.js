@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
+const { customerFrequencyCalculator } = require('../utils/customerFrequencyCalculator');
 
 const router = express.Router();
 
@@ -20,8 +21,12 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
     const totalExpenses = parseFloat(expenseResult.rows[0].total_expenses) || 0;
 
     // Get orders count
-    const ordersCountResult = await db.query('SELECT COUNT(*) as count FROM orders');
-    const totalOrders = parseInt(ordersCountResult.rows[0].count) || 0;
+    const ordersCountResult = await db.query('SELECT * FROM orders');
+    const orderFrequency = customerFrequencyCalculator(ordersCountResult.rows);
+    let totalOrders = 0;
+    for([key, value] of Object.entries(orderFrequency)) {
+      totalOrders += value.customerFrequency;
+    }
 
     // Get customers count
     const customersCountResult = await db.query('SELECT COUNT(*) as count FROM customers');
@@ -125,7 +130,7 @@ router.get('/monthly-report', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
     const startDate = `${year}-${month.padStart(2, '0')}-01`;
-    const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+    const endDate = new Date(year, month, 1).toISOString().split('T')[0];
 
     // Get orders for the month
     const ordersResult = await db.query(`
@@ -174,13 +179,8 @@ router.get('/monthly-report', authenticateToken, async (req, res) => {
         }
       }
     }
-
-    // Customer frequency
-    const customerFrequency = {};
-    orders.forEach(order => {
-      const customerId = order.customer_id;
-      customerFrequency[customerId] = (customerFrequency[customerId] || 0) + 1;
-    });
+    // Calculate customer frequency
+    const customerFrequency = customerFrequencyCalculator(orders);
 
     res.json({
       month: `${year}-${month.padStart(2, '0')}`,
