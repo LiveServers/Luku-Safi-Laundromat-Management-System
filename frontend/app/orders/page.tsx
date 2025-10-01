@@ -84,7 +84,7 @@ export default function Orders() {
     payment_status: 'pending',
     transaction_code: '',
     notes: '',
-    status: ''
+    status: 'received'
   });
   const router = useRouter();
 
@@ -299,7 +299,7 @@ export default function Orders() {
     setNewOrder({
       customer_id: order.customer_id,
       service_type: order.service_type,
-      order_date: order.order_date || new Date(order.created_at).toISOString().split('T')[0],
+      order_date: order.order_date ? new Date(order.order_date).toISOString().split('T')[0] : new Date(order.created_at).toISOString().split('T')[0],
       weight: order.weight.toString(),
       items: order.items.toString(),
       subtotal: order.subtotal.toString(),
@@ -513,7 +513,12 @@ export default function Orders() {
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-[400px] p-0">
+                        <PopoverContent className="w-[400px] p-0" 
+                          avoidCollisions={false}
+                          collisionPadding={100}
+                          side="bottom"
+                          style={{ overflow: 'visible' }}
+                          >
                           <Command>
                             <CommandInput 
                               placeholder="Search services..." 
@@ -636,6 +641,22 @@ export default function Orders() {
                         onChange={(e) => setNewOrder({...newOrder, total_amount: e.target.value})}
                         className="bg-green-50 font-medium"
                       />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Order Status</Label>
+                      <Select value={newOrder.status || 'received'} onValueChange={(value) => setNewOrder({...newOrder, status: value})}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {orderStatuses.map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {status.charAt(0).toUpperCase() + status.slice(1)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     {/* Payment Status */}
@@ -822,11 +843,10 @@ export default function Orders() {
                     <TableHead>Customer</TableHead>
                     <TableHead>Service</TableHead>
                     <TableHead>Details</TableHead>
-                    <TableHead>Date</TableHead>
+                    <TableHead>Order Date</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Payment</TableHead>
-                    <TableHead>Date</TableHead>
                     <TableHead>Last Updated</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -885,9 +905,6 @@ export default function Orders() {
                         <Badge className={getPaymentStatusColor(order.payment_status)} variant="secondary">
                           {order.payment_status}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-600">
-                        {new Date(order.order_date || order.created_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-sm text-gray-600">
                         {order.updated_at ? (
@@ -1135,21 +1152,6 @@ export default function Orders() {
               </div>
 
               {/* Status */}
-              <div className="space-y-2">
-                <Label>Order Status</Label>
-                <Select value={newOrder.status || 'received'} onValueChange={(value) => setNewOrder({...newOrder, status: value})}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {orderStatuses.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status.charAt(0).toUpperCase() + status.slice(1)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
 
               {/* Order Status */}
               <div className="space-y-2">

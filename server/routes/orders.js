@@ -19,7 +19,7 @@ router.get('/', authenticateToken, async (req, res) => {
       FROM orders o
       LEFT JOIN customers c ON o.customer_id = c.id
       LEFT JOIN users u ON o.updated_by = u.id
-      ORDER BY o.created_at DESC
+      ORDER BY o.order_date DESC
     `);
 
     if(result.rows.length === 0) {
