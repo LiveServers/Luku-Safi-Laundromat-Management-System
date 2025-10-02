@@ -238,6 +238,7 @@ export default function Customers() {
                       id="phone"
                       value={newCustomer.phone}
                       onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
+                      required
                     />
                   </div>
 
