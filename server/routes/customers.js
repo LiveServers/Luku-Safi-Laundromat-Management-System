@@ -113,10 +113,6 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Customer with this phone number already exists' });
     }
     
-    if(customers.rows.find(c => c.email === email)) {
-      return res.status(400).json({ error: 'Customer with this email already exists' });
-    }
-    
     const result = await db.query(
       'INSERT INTO customers (name, email, phone, address) VALUES ($1, $2, $3, $4) RETURNING *',
       [name, email, phone, address]
