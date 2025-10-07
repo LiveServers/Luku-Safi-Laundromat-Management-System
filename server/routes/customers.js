@@ -8,11 +8,50 @@ const router = express.Router();
 // Get all customers
 router.get('/', authenticateToken, async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    const search = req.query.search || '';
+
+    // Build WHERE clause
+    let whereClause = '';
+    let queryParams = [];
+    let paramCount = 0;
+
+    if (search) {
+      paramCount++;
+      whereClause += ` WHERE (name ILIKE $${paramCount} OR email ILIKE $${paramCount} OR phone ILIKE $${paramCount})`;
+      queryParams.push(`%${search}%`);
+    }
+
+    // Get total count
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM customers
+      ${whereClause}
+    `;
+    const countResult = await db.query(countQuery, queryParams);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Get paginated results
     const result = await db.query(
-      'SELECT * FROM customers ORDER BY name'
+      `SELECT * FROM customers ${whereClause} ORDER BY name LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
+      [...queryParams, limit, offset]
     );
 
-    res.json(result.rows);
+    const totalPages = Math.ceil(total / limit);
+
+    res.json({
+      customers: result.rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1
+      }
+    });
   } catch (error) {
     console.error('Get customers error:', error);
     res.status(500).json({ error: error.message });
@@ -43,6 +82,7 @@ router.get('/:id/history', authenticateToken, async (req, res) => {
     );
 
     const orders = ordersResult.rows;
+
     // Calculate analytics
     const totalSpent = orders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0);
     const totalOrders = customerFrequencyCalculator(orders)[customerId].customerFrequency || 0;
@@ -112,7 +152,7 @@ router.post('/', authenticateToken, async (req, res) => {
     if(customers.rows.find(c => c.phone === phone)) {
       return res.status(400).json({ error: 'Customer with this phone number already exists' });
     }
-    
+
     const result = await db.query(
       'INSERT INTO customers (name, email, phone, address) VALUES ($1, $2, $3, $4) RETURNING *',
       [name, email, phone, address]

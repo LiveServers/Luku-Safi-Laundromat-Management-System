@@ -7,6 +7,39 @@ const router = express.Router();
 // Get all expenses
 router.get('/', authenticateToken, async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    const search = req.query.search || '';
+    const category = req.query.category || '';
+
+    // Build WHERE clause
+    let whereClause = '';
+    let queryParams = [];
+    let paramCount = 0;
+
+    if (search) {
+      paramCount++;
+      whereClause += ` WHERE (e.description ILIKE $${paramCount} OR e.category ILIKE $${paramCount} OR e.transaction_code ILIKE $${paramCount})`;
+      queryParams.push(`%${search}%`);
+    }
+
+    if (category && category !== 'all') {
+      paramCount++;
+      whereClause += whereClause ? ` AND e.category = $${paramCount}` : ` WHERE e.category = $${paramCount}`;
+      queryParams.push(category);
+    }
+
+    // Get total count
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM expenses e
+      ${whereClause}
+    `;
+    const countResult = await db.query(countQuery, queryParams);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Get paginated results
     const result = await db.query(`
       SELECT 
         e.*,
@@ -14,8 +47,12 @@ router.get('/', authenticateToken, async (req, res) => {
         u.name as updated_by_user_name
       FROM expenses e
       LEFT JOIN users u ON e.updated_by = u.id
+      ${whereClause}
       ORDER BY e.date DESC, e.created_at DESC
-    `);
+      LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
+    `, [...queryParams, limit, offset]);
+
+    const totalPages = Math.ceil(total / limit);
 
     // Transform the result to match the expected structure
     const expenses = result.rows.map(row => ({
@@ -33,7 +70,17 @@ router.get('/', authenticateToken, async (req, res) => {
       } : null
     }));
 
-    res.json(expenses);
+    res.json({
+      expenses,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1
+      }
+    });
   } catch (error) {
     console.error('Get expenses error:', error);
     res.status(500).json({ error: error.message });

@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { SmartPagination } from '@/components/ui/pagination';
 import { Plus, Search, ArrowLeft, Mail, Phone, Eye, TrendingUp, Calendar, DollarSign } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -21,6 +23,15 @@ interface Customer {
   phone?: string;
   address?: string;
   created_at: string;
+}
+
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
 }
 
 interface CustomerHistory {
@@ -39,6 +50,9 @@ interface CustomerHistory {
 }
 export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 1, limit: 10, total: 0, totalPages: 0, hasNext: false, hasPrev: false
+  });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -63,10 +77,16 @@ export default function Customers() {
     fetchCustomers();
   }, []);
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = async (page = 1, limit = 10, search = '') => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/customers', {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+        ...(search && { search })
+      });
+      
+      const response = await fetch(`/api/customers?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -74,7 +94,8 @@ export default function Customers() {
 
       if (response.ok) {
         const data = await response.json();
-        setCustomers(data);
+        setCustomers(data.customers);
+        setPagination(data.pagination);
       }
     } catch (error) {
       console.error('Error fetching customers:', error);
@@ -82,6 +103,18 @@ export default function Customers() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearch = () => {
+    fetchCustomers(1, pagination.limit, searchTerm);
+  };
+
+  const handlePageChange = (page: number) => {
+    fetchCustomers(page, pagination.limit, searchTerm);
+  };
+
+  const handleLimitChange = (limit: number) => {
+    fetchCustomers(1, limit, searchTerm);
   };
 
   const handleCreateCustomer = async (e: React.FormEvent) => {
@@ -97,8 +130,9 @@ export default function Customers() {
         },
         body: JSON.stringify(newCustomer),
       });
+
       if (response.ok) {
-        fetchCustomers();
+        fetchCustomers(pagination.page, pagination.limit, searchTerm);
         setIsCreateDialogOpen(false);
         setNewCustomer({
           name: '',
@@ -106,6 +140,7 @@ export default function Customers() {
           phone: '',
           address: ''
         });
+        
       }else if(response.status === 400){
         const data = await response.json();
         setError(data.error || 'Failed to create customer. Please check your input.');
@@ -137,12 +172,6 @@ export default function Customers() {
       setError(error instanceof Error ? error.message : 'Unknown error');
     }
   };
-
-  const filteredCustomers = customers.filter(customer =>
-    customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.phone?.includes(searchTerm)
-  );
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-KE', {
@@ -264,14 +293,47 @@ export default function Customers() {
         {/* Search */}
         <Card className="mb-4 sm:mb-6">
           <CardContent className="pt-4 sm:pt-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="Search customers by name, email, or phone..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className='flex-1'>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Search customers by name, email, or phone..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                  />
+                </div>
+              </div>
+              <Button onClick={handleSearch}>Search</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Results Summary */}
+        <Card className="mb-4 sm:mb-6">
+          <CardContent className="pt-4 sm:pt-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <p className="text-sm text-gray-600">
+                  Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} customers
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Show:</label>
+                <Select value={pagination.limit.toString()} onValueChange={(value) => handleLimitChange(parseInt(value))}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -279,12 +341,12 @@ export default function Customers() {
         {/* Customers Table */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg sm:text-xl">Customers ({filteredCustomers.length})</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">Customers ({customers.length})</CardTitle>
           </CardHeader>
           <CardContent>
             {/* Mobile Card View */}
             <div className="block sm:hidden space-y-4">
-              {filteredCustomers.map((customer) => (
+              {customers.map((customer) => (
                 <Card key={customer.id} className="p-4">
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1 min-w-0">
@@ -341,7 +403,7 @@ export default function Customers() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredCustomers.map((customer) => (
+                  {customers.map((customer) => (
                     <TableRow key={customer.id}>
                       <TableCell>
                         <div className="font-medium">{customer.name}</div>
@@ -389,12 +451,25 @@ export default function Customers() {
               </Table>
             </div>
             
-            {filteredCustomers.length === 0 && (
+            {customers.length === 0 && (
               <div className="text-center py-8 text-gray-500">
                 No customers found matching your search criteria.
               </div>
             )}
           </CardContent>
+
+          {/* Pagination */}
+          {pagination.totalPages > 1 && (
+            <div className="px-6 py-4 border-t">
+              <SmartPagination
+                currentPage={pagination.page}
+                totalPages={pagination.totalPages}
+                onPageChange={handlePageChange}
+                hasNext={pagination.hasNext}
+                hasPrev={pagination.hasPrev}
+              />
+            </div>
+          )}
         </Card>
       </div>
 
@@ -435,7 +510,7 @@ export default function Customers() {
                         </div>
                         <p className="text-xs text-gray-600">Total Orders</p>
                       </div>
-                      </div>
+                    </div>
                     </CardContent>
                   </Card>
                 <Card>

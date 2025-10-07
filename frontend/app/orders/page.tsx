@@ -10,16 +10,26 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { SmartPagination } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Search, ArrowLeft, Edit, Trash2, Check, ChevronsUpDown } from 'lucide-react';
+import { Plus, Search, ArrowLeft, CreditCard as Edit, Trash2, Check, ChevronsUpDown } from 'lucide-react';
 
 interface Customer {
   id: string;
   name: string;
   email?: string;
   phone?: string;
+}
+
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
 }
 
 interface Service {
@@ -61,6 +71,10 @@ export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 1, limit: 10, total: 0, totalPages: 0, hasNext: false, hasPrev: false
+  });
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -108,10 +122,18 @@ export default function Orders() {
     fetchServices();
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (page = 1, limit = 10, search = '', status = '', paymentStatus = '') => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/orders', {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+        ...(search && { search }),
+        ...(status && status !== 'all' ? { status }: { status:'' }),
+        ...(paymentStatus && paymentStatus !== 'all' ? { paymentStatus } : { paymentStatus: '' })
+      });
+      
+      const response = await fetch(`/api/orders?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -119,13 +141,26 @@ export default function Orders() {
 
       if (response.ok) {
         const data = await response.json();
-        setOrders(data);
+        setOrders(data.orders);
+        setPagination(data.pagination);
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // const handleSearch = () => {
+  //   fetchOrders(1, pagination.limit, searchTerm, statusFilter, paymentStatusFilter);
+  // };
+
+  const handlePageChange = (page: number) => {
+    fetchOrders(page, pagination.limit, searchTerm, statusFilter, paymentStatusFilter);
+  };
+
+  const handleLimitChange = (limit: number) => {
+    fetchOrders(1, limit, searchTerm, statusFilter, paymentStatusFilter);
   };
 
   const fetchCustomers = async () => {
@@ -139,7 +174,7 @@ export default function Orders() {
 
       if (response.ok) {
         const data = await response.json();
-        setCustomers(data);
+        setCustomers(data.customers || data);
       }
     } catch (error) {
       console.error('Error fetching customers:', error);
@@ -253,7 +288,7 @@ export default function Orders() {
       });
 
       if (response.ok) {
-        fetchOrders();
+        fetchOrders(pagination.page, pagination.limit, searchTerm, statusFilter, paymentStatusFilter);
         setIsCreateDialogOpen(false);
         resetForm();
       }
@@ -285,7 +320,7 @@ export default function Orders() {
       });
 
       if (response.ok) {
-        fetchOrders();
+        fetchOrders(pagination.page, pagination.limit, searchTerm, statusFilter, paymentStatusFilter);
         setEditingOrder(null);
         resetForm();
       }
@@ -330,7 +365,7 @@ export default function Orders() {
       });
 
       if (response.ok) {
-        fetchOrders();
+        fetchOrders(pagination.page, pagination.limit, searchTerm, statusFilter, paymentStatusFilter);
       }
     } catch (error) {
       console.error('Error deleting order:', error);
@@ -513,11 +548,11 @@ export default function Orders() {
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-[400px] p-0" 
-                          avoidCollisions={false}
-                          collisionPadding={100}
-                          side="bottom"
-                          style={{ overflow: 'visible' }}
+                          <PopoverContent className="w-[400px] p-0" 
+                            avoidCollisions={false}
+                            collisionPadding={100}
+                            side="bottom"
+                            style={{ overflow: 'visible' }}
                           >
                           <Command>
                             <CommandInput 
@@ -708,6 +743,35 @@ export default function Orders() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        {/* Results Summary */}
+        <Card className="mb-4 sm:mb-6">
+          <CardContent className="pt-4 sm:pt-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <p className="text-sm text-gray-600">
+                  Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} orders
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Show:</label>
+                <Select value={pagination.limit.toString()} onValueChange={(value) => handleLimitChange(parseInt(value))}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Filters */}
         <Card className="mb-4 sm:mb-6">
           <CardContent className="pt-4 sm:pt-6">
@@ -750,10 +814,11 @@ export default function Orders() {
                     ))}
                   </SelectContent>
                 </Select>
+                </div>
               </div>
-            </div>
           </CardContent>
         </Card>
+
 
         {/* Orders Table */}
         <Card>
@@ -907,6 +972,9 @@ export default function Orders() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-gray-600">
+                        {new Date(order.order_date || order.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600">
                         {order.updated_at ? (
                           <div>
                             <div>{new Date(order.updated_at).toLocaleDateString()}</div>
@@ -949,6 +1017,19 @@ export default function Orders() {
               </div>
             )}
           </CardContent>
+
+          {/* Pagination */}
+          {pagination.totalPages > 1 && (
+            <div className="px-6 py-4 border-t">
+              <SmartPagination
+                currentPage={pagination.page}
+                totalPages={pagination.totalPages}
+                onPageChange={handlePageChange}
+                hasNext={pagination.hasNext}
+                hasPrev={pagination.hasPrev}
+              />
+            </div>
+          )}
         </Card>
       </div>
 
@@ -1150,8 +1231,6 @@ export default function Orders() {
                   className="bg-green-50 font-medium"
                 />
               </div>
-
-              {/* Status */}
 
               {/* Order Status */}
               <div className="space-y-2">
