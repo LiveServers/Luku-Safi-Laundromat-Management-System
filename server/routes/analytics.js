@@ -45,7 +45,7 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
         c.name as customer_name
       FROM orders o
       LEFT JOIN customers c ON o.customer_id = c.id
-      ORDER BY o.created_at DESC
+      ORDER BY o.order_date DESC
       LIMIT 5
     `);
 
@@ -81,11 +81,11 @@ router.get('/revenue-chart', authenticateToken, async (req, res) => {
   try {
     const result = await db.query(`
       SELECT 
-        DATE_TRUNC('month', created_at) as month,
+        DATE_TRUNC('month', order_date) as month,
         SUM(total_amount) as revenue
       FROM orders 
       WHERE payment_status = 'paid'
-      GROUP BY DATE_TRUNC('month', created_at)
+      GROUP BY DATE_TRUNC('month', order_date)
       ORDER BY month
     `);
 
@@ -141,7 +141,7 @@ router.get('/monthly-report', authenticateToken, async (req, res) => {
         c.created_at as customer_created_at
       FROM orders o
       LEFT JOIN customers c ON o.customer_id = c.id
-      WHERE o.created_at >= $1 AND o.created_at <= $2
+      WHERE o.order_date >= $1 AND o.order_date <= $2
     `, [startDate, endDate + 'T23:59:59']);
 
     // Get expenses for the month

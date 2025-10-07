@@ -4,9 +4,57 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
+const requireOwner = (req, res, next) => {
+  if (req.user.role !== 'owner') {
+    return res.status(403).json({ error: 'Access denied. Owner role required.' });
+  }
+  next();
+};
+
 // Get all orders
 router.get('/', authenticateToken, async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    const search = req.query.search || '';
+    const status = req.query.status || '';
+    const paymentStatus = req.query.paymentStatus || '';
+
+    // Build WHERE clause
+    let whereClause = '';
+    let queryParams = [];
+    let paramCount = 0;
+
+    if (search) {
+      paramCount++;
+      whereClause += ` WHERE (c.name ILIKE $${paramCount} OR o.service_type ILIKE $${paramCount} OR o.transaction_code ILIKE $${paramCount})`;
+      queryParams.push(`%${search}%`);
+    }
+
+    if (status) {
+      paramCount++;
+      whereClause += whereClause ? ` AND o.status = $${paramCount}` : ` WHERE o.status = $${paramCount}`;
+      queryParams.push(status);
+    }
+
+    if (paymentStatus) {
+      paramCount++;
+      whereClause += whereClause ? ` AND o.payment_status = $${paramCount}` : ` WHERE o.payment_status = $${paramCount}`;
+      queryParams.push(paymentStatus);
+    }
+
+    // Get total count
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM orders o
+      LEFT JOIN customers c ON o.customer_id = c.id
+      ${whereClause}
+    `;
+    const countResult = await db.query(countQuery, queryParams);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Get paginated results
     const result = await db.query(`
       SELECT 
         o.*,
@@ -19,12 +67,17 @@ router.get('/', authenticateToken, async (req, res) => {
       FROM orders o
       LEFT JOIN customers c ON o.customer_id = c.id
       LEFT JOIN users u ON o.updated_by = u.id
+      ${whereClause}
       ORDER BY o.order_date DESC
-    `);
+      LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
+    `, [...queryParams, limit, offset]);
 
     if(result.rows.length === 0) {
       return res.status(404).json({ error: 'No orders found' });
     }
+
+    const totalPages = Math.ceil(total / limit);
+
     // Transform the result to match the expected structure
     const orders = result.rows.map(row => ({
       id: row.id,
@@ -56,7 +109,17 @@ router.get('/', authenticateToken, async (req, res) => {
       } : null
     }));
 
-    res.json(orders);
+    res.json({
+      orders,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1
+      }
+    });
   } catch (error) {
     console.error('Get orders error:', error);
     res.status(500).json({ error: error.message });
@@ -325,7 +388,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 // Delete order
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', authenticateToken, requireOwner, async (req, res) => {
   try {
     const result = await db.query('DELETE FROM orders WHERE id = $1', [req.params.id]);
 

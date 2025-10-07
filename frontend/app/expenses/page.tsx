@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Search, ArrowLeft, Trash2, Edit } from 'lucide-react';
+import { SmartPagination } from '@/components/ui/pagination';
+import { Plus, Search, ArrowLeft, Trash2, CreditCard as Edit } from 'lucide-react';
 
 interface Expense {
   id: string;
@@ -27,8 +28,20 @@ interface Expense {
   transaction_code?: string;
 }
 
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
 export default function Expenses() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 1, limit: 10, total: 0, totalPages: 0, hasNext: false, hasPrev: false
+  });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -76,10 +89,17 @@ export default function Expenses() {
     fetchExpenses();
   }, []);
 
-  const fetchExpenses = async () => {
+  const fetchExpenses = async (page = 1, limit = 10, search = '', category = '') => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/expenses', {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+        ...(search && { search }),
+        ...(category && category !== 'all' && { category })
+      });
+      
+      const response = await fetch(`/api/expenses?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -87,13 +107,26 @@ export default function Expenses() {
 
       if (response.ok) {
         const data = await response.json();
-        setExpenses(data);
+        setExpenses(data.expenses);
+        setPagination(data.pagination);
       }
     } catch (error) {
       console.error('Error fetching expenses:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearch = () => {
+    fetchExpenses(1, pagination.limit, searchTerm, categoryFilter);
+  };
+
+  const handlePageChange = (page: number) => {
+    fetchExpenses(page, pagination.limit, searchTerm, categoryFilter);
+  };
+
+  const handleLimitChange = (limit: number) => {
+    fetchExpenses(1, limit, searchTerm, categoryFilter);
   };
 
   const handleCreateExpense = async (e: React.FormEvent) => {
@@ -111,7 +144,7 @@ export default function Expenses() {
       });
 
       if (response.ok) {
-        fetchExpenses();
+        fetchExpenses(pagination.page, pagination.limit, searchTerm, categoryFilter);
         setIsCreateDialogOpen(false);
         setNewExpense({
           category: '',
@@ -142,7 +175,7 @@ export default function Expenses() {
       });
 
       if (response.ok) {
-        fetchExpenses();
+        fetchExpenses(pagination.page, pagination.limit, searchTerm, categoryFilter);
         setEditingExpense(null);
         setNewExpense({
           category: '',
@@ -183,21 +216,14 @@ export default function Expenses() {
       });
 
       if (response.ok) {
-        fetchExpenses();
+        fetchExpenses(pagination.page, pagination.limit, searchTerm, categoryFilter);
       }
     } catch (error) {
       console.error('Error deleting expense:', error);
     }
   };
 
-  const filteredExpenses = expenses.filter(expense => {
-    const matchesSearch = expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         expense.category.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || expense.category === categoryFilter;
-    return matchesSearch && matchesCategory;
-  });
-
-  const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-KE', {
@@ -346,6 +372,7 @@ export default function Expenses() {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                   />
                 </div>
               </div>
@@ -362,6 +389,34 @@ export default function Expenses() {
                   ))}
                 </SelectContent>
               </Select>
+              <Button onClick={handleSearch}>Search</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Results Summary */}
+        <Card className="mb-4 sm:mb-6">
+          <CardContent className="pt-4 sm:pt-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <p className="text-sm text-gray-600">
+                  Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} expenses
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Show:</label>
+                <Select value={pagination.limit.toString()} onValueChange={(value) => handleLimitChange(parseInt(value))}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -369,12 +424,12 @@ export default function Expenses() {
         {/* Expenses Table */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg sm:text-xl">Expenses ({filteredExpenses.length})</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">Expenses ({expenses.length})</CardTitle>
           </CardHeader>
           <CardContent>
             {/* Mobile Card View */}
             <div className="block sm:hidden space-y-4">
-              {filteredExpenses.map((expense) => (
+              {expenses.map((expense) => (
                 <Card key={expense.id} className="p-4">
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1 min-w-0">
@@ -453,7 +508,7 @@ export default function Expenses() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredExpenses.map((expense) => (
+                  {expenses.map((expense) => (
                     <TableRow key={expense.id}>
                       <TableCell className="text-sm">
                         {new Date(expense.date).toLocaleDateString()}
@@ -514,12 +569,25 @@ export default function Expenses() {
               </Table>
             </div>
             
-            {filteredExpenses.length === 0 && (
+            {expenses.length === 0 && (
               <div className="text-center py-8 text-gray-500">
                 No expenses found matching your criteria.
               </div>
             )}
           </CardContent>
+
+          {/* Pagination */}
+          {pagination.totalPages > 1 && (
+            <div className="px-6 py-4 border-t">
+              <SmartPagination
+                currentPage={pagination.page}
+                totalPages={pagination.totalPages}
+                onPageChange={handlePageChange}
+                hasNext={pagination.hasNext}
+                hasPrev={pagination.hasPrev}
+              />
+            </div>
+          )}
         </Card>
       </div>
 
