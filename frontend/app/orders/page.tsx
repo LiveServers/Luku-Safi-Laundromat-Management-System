@@ -166,7 +166,11 @@ export default function Orders() {
   const fetchCustomers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/customers', {
+      const params = new URLSearchParams({
+        page: "1",
+        limit: "1000", //for now, later search api and add debouncing
+      });
+      const response = await fetch(`/api/customers?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
