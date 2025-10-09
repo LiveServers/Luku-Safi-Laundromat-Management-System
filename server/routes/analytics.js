@@ -131,6 +131,8 @@ router.get('/monthly-report', authenticateToken, async (req, res) => {
     const { month, year } = req.query;
     const startDate = `${year}-${month.padStart(2, '0')}-01`;
     const endDate = new Date(year, month, 1).toISOString().split('T')[0];
+    console.log("START and END", startDate, endDate)
+    console.log("WHAT'S THE SERVERS DATE", new Date(), new Date().toLocaleString())
 
     // Get orders for the month
     const ordersResult = await db.query(`
@@ -151,12 +153,18 @@ router.get('/monthly-report', authenticateToken, async (req, res) => {
     );
 
     const orders = ordersResult.rows;
+    console.log("ORDERS FIRST", orders[0])
+    console.log("ORDERS LAST", orders[orders.length-1])
     const expenses = expensesResult.rows;
+    console.log("EXPENSES FIRST", orders[0])
+    console.log("EXPENSES LAST", orders[orders.length-1])
 
     // Calculate revenue
     const revenue = orders
       .filter(o => o.payment_status === 'paid')
       .reduce((sum, order) => sum + parseFloat(order.total_amount), 0);
+
+    console.log("WHAT'S THE TOTAL REVENUE", revenue)
 
     // Calculate total expenses
     const totalExpenses = expenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
@@ -181,7 +189,7 @@ router.get('/monthly-report', authenticateToken, async (req, res) => {
     }
     // Calculate customer frequency
     const customerFrequency = customerFrequencyCalculator(orders);
-
+    console.log("CABINET", expenses[0])
     res.json({
       month: `${year}-${month.padStart(2, '0')}`,
       orders: orders || [],

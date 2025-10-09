@@ -86,8 +86,8 @@ export default function Reports() {
     if (!report) return;
     
     const ordersData = report.orders.map(order => ({
-      date: new Date(order.created_at).toLocaleDateString(),
-      customer: order.customers?.name || 'Unknown',
+      date: new Date(order.order_date).toLocaleDateString(),
+      customer: order?.customer_name || 'Unknown',
       service: order.service_type,
       amount: order.total_amount,
       payment_status: order.payment_status,
@@ -105,7 +105,7 @@ export default function Reports() {
     if (!report) return;
     
     const expensesData = report.expenses.map(expense => ({
-      date: expense.date,
+      date: new Date(expense.date).toLocaleDateString(),
       category: expense.category,
       description: expense.description,
       amount: expense.amount
