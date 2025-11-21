@@ -15,10 +15,11 @@ const app = express();
 const PORT = process.env.PORT;
 
 // Middleware
-// app.use(helmet());
+app.use(helmet());
 app.use(cors({
   origin: "*",
 }));
+
 app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
