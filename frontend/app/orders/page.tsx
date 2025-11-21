@@ -14,7 +14,7 @@ import { SmartPagination } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Search, ArrowLeft, CreditCard as Edit, Trash2, Check, ChevronsUpDown } from 'lucide-react';
+import { Plus, Search, ArrowLeft, CreditCard as Edit, Trash2, Check, ChevronsUpDown, Receipt } from 'lucide-react';
 
 interface Customer {
   id: string;
@@ -74,7 +74,7 @@ export default function Orders() {
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1, limit: 10, total: 0, totalPages: 0, hasNext: false, hasPrev: false
   });
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState('');
+  const [paymentStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -85,6 +85,7 @@ export default function Orders() {
   const [serviceSearchOpen, setServiceSearchOpen] = useState(false);
   const [customerSearchValue, setCustomerSearchValue] = useState('');
   const [serviceSearchValue, setServiceSearchValue] = useState('');
+  const [generatingReceipt, setGeneratingReceipt] = useState<string | null>(null);
   const [newOrder, setNewOrder] = useState({
     customer_id: '',
     service_type: '',
@@ -207,8 +208,8 @@ export default function Orders() {
     const service = services.find(s => s.id === serviceId);
     if (!service) return 0;
 
-    let total = service.base_price || 0;
-    
+    let total = 0.00;
+
     if (service.price_per_kg && weight > 0) {
       total += service.price_per_kg * weight;
     }
@@ -240,7 +241,6 @@ export default function Orders() {
 
   const handleWeightOrItemsChange = (field: string, value: string) => {
     const updatedOrder = { ...newOrder, [field]: value };
-    
     if (newOrder.service_type) {
       const service = services.find(s => s.display_name === newOrder.service_type);
       if (service) {
@@ -373,6 +373,64 @@ export default function Orders() {
       }
     } catch (error) {
       console.error('Error deleting order:', error);
+    }
+  };
+
+  const handleGenerateReceipt = async (order: Order) => {
+    if (!order.customers?.id || !order.order_date) {
+      alert('Cannot generate receipt: Missing customer or order date information');
+      return;
+    }
+
+    setGeneratingReceipt(order.id);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/receipts/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          customer_id: order.customers.id,
+          order_date: order.order_date
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        const downloadResponse = await fetch(`/api/receipts/download/${result.filename}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (downloadResponse.ok) {
+          const blob = await downloadResponse.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Receipt_${result.receiptNumber}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          
+          alert(`Receipt generated successfully! (${result.orderCount} orders, Total: ${formatCurrency(result.totalAmount)})`);
+        } else {
+          throw new Error('Failed to download receipt');
+        }
+      } else {
+        const errorData = await response.json();
+        alert(`Error generating receipt: ${errorData.error}`);
+      }
+    } catch (error) {
+      console.error('Error generating receipt:', error);
+      alert('Network error. Please try again.');
+    } finally {
+      setGeneratingReceipt(null);
     }
   };
 
@@ -552,7 +610,7 @@ export default function Orders() {
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
                         </PopoverTrigger>
-                          <PopoverContent className="w-[400px] p-0" 
+                        <PopoverContent className="w-[400px] p-0" 
                             avoidCollisions={false}
                             collisionPadding={100}
                             side="bottom"
@@ -773,9 +831,9 @@ export default function Orders() {
             </div>
           </CardContent>
         </Card>
-      </div>
+        </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Filters */}
         <Card className="mb-4 sm:mb-6">
           <CardContent className="pt-4 sm:pt-6">
@@ -818,8 +876,8 @@ export default function Orders() {
                     ))}
                   </SelectContent>
                 </Select>
-                </div>
               </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -874,6 +932,18 @@ export default function Orders() {
                     </div>
                     
                     <div className="flex space-x-1">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleGenerateReceipt(order)}
+                        disabled={generatingReceipt === order.id}
+                      >
+                        {generatingReceipt === order.id ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        ) : (
+                          <Receipt className="h-4 w-4" />
+                        )}
+                      </Button>
                       <Button 
                         variant="ghost" 
                         size="sm"
@@ -992,6 +1062,18 @@ export default function Orders() {
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleGenerateReceipt(order)}
+                            disabled={generatingReceipt === order.id}
+                          >
+                            {generatingReceipt === order.id ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                            ) : (
+                              <Receipt className="h-4 w-4" />
+                            )}
+                          </Button>
                           <Button 
                             variant="ghost" 
                             size="sm"

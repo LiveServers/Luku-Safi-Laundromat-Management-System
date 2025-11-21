@@ -10,15 +10,17 @@ const expensesRoutes = require('./routes/expenses');
 const customersRoutes = require('./routes/customers');
 const analyticsRoutes = require('./routes/analytics');
 const servicesRoutes = require('./routes/services');
+const receiptsRoutes = require('./routes/receipts');
 
 const app = express();
 const PORT = process.env.PORT;
 
 // Middleware
-// app.use(helmet());
+app.use(helmet());
 app.use(cors({
   origin: "*",
 }));
+
 app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -30,6 +32,7 @@ app.use('/api/expenses', expensesRoutes);
 app.use('/api/customers', customersRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/services', servicesRoutes);
+app.use('/api/receipts', receiptsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
