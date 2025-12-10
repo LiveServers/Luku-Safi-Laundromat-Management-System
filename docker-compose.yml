@@ -40,7 +40,7 @@ services:
     container_name: laundromat_frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000" #no ip access via 3000 anymore, use domain name
     environment:
       - NODE_ENV=production
     depends_on:
