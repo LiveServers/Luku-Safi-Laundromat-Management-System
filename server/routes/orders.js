@@ -1,15 +1,8 @@
 const express = require('express');
 const db = require('../config/database');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireOwner } = require('../middleware');
 
 const router = express.Router();
-
-const requireOwner = (req, res, next) => {
-  if (req.user.role !== 'owner') {
-    return res.status(403).json({ error: 'Access denied. Owner role required.' });
-  }
-  next();
-};
 
 // Get all orders
 router.get('/', authenticateToken, async (req, res) => {
@@ -62,10 +55,13 @@ router.get('/', authenticateToken, async (req, res) => {
         c.name as customer_name,
         c.email as customer_email,
         c.phone as customer_phone,
+        l.id as location_id,
+        l.display_name as location_name,
         u.id as updated_by_user_id,
         u.name as updated_by_user_name
       FROM orders o
       LEFT JOIN customers c ON o.customer_id = c.id
+      LEFT JOIN locations l ON o.location_id = l.id
       LEFT JOIN users u ON o.updated_by = u.id
       ${whereClause}
       ORDER BY o.order_date DESC
@@ -103,6 +99,10 @@ router.get('/', authenticateToken, async (req, res) => {
         email: row.customer_email,
         phone: row.customer_phone
       } : null,
+      location: row.location_name ? {
+        id: row.location_id,
+        name: row.location_name
+      } : null,
       updated_by_user: row.updated_by_user_name ? {
         id: row.updated_by_user_id,
         name: row.updated_by_user_name
@@ -136,10 +136,13 @@ router.get('/:id', authenticateToken, async (req, res) => {
         c.name as customer_name,
         c.email as customer_email,
         c.phone as customer_phone,
+        l.id as location_id,
+        l.display_name as location_name,
         u.id as updated_by_user_id,
         u.name as updated_by_user_name
       FROM orders o
       LEFT JOIN customers c ON o.customer_id = c.id
+      LEFT JOIN locations l ON o.location_id = l.id
       LEFT JOIN users u ON o.updated_by = u.id
       WHERE o.id = $1
     `, [req.params.id]);
@@ -173,6 +176,10 @@ router.get('/:id', authenticateToken, async (req, res) => {
         email: row.customer_email,
         phone: row.customer_phone
       } : null,
+      location: row.location_name ? {
+        id: row.location_id,
+        name: row.location_name
+      } : null,
       updated_by_user: row.updated_by_user_name ? {
         id: row.updated_by_user_id,
         name: row.updated_by_user_name
@@ -191,6 +198,7 @@ router.post('/', authenticateToken, async (req, res) => {
   try {
     const {
       customer_id,
+      location_id,
       service_type,
       order_date,
       weight,
@@ -207,13 +215,14 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const result = await db.query(`
       INSERT INTO orders (
-        customer_id, service_type, order_date, weight, items, 
+        customer_id, location_id, service_type, order_date, weight, items, 
         subtotal, discount_amount, discount_reason, total_amount, 
         payment_status, status, transaction_code, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *
     `, [
       customer_id,
+      location_id,
       service_type,
       order_date || new Date().toISOString().split('T')[0],
       parseFloat(weight) || 0,
@@ -235,9 +244,12 @@ router.post('/', authenticateToken, async (req, res) => {
         c.id as customer_id,
         c.name as customer_name,
         c.email as customer_email,
-        c.phone as customer_phone
+        c.phone as customer_phone,
+        l.id as location_id,
+        l.display_name as location_name
       FROM orders o
       LEFT JOIN customers c ON o.customer_id = c.id
+      LEFT JOIN locations l ON o.location_id = l.id
       WHERE o.id = $1
     `, [result.rows[0].id]);
 
@@ -264,6 +276,10 @@ router.post('/', authenticateToken, async (req, res) => {
         name: row.customer_name,
         email: row.customer_email,
         phone: row.customer_phone
+      } : null,
+      location: row.location_name ? {
+        id: row.location_id,
+        name: row.location_name
       } : null
     };
 
@@ -279,6 +295,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const {
       customer_id,
+      location_id,
       service_type,
       order_date,
       weight,
@@ -296,23 +313,25 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const result = await db.query(`
       UPDATE orders SET 
         customer_id = $1,
-        service_type = $2,
-        order_date = $3,
-        weight = $4,
-        items = $5,
-        subtotal = $6,
-        discount_amount = $7,
-        discount_reason = $8,
-        total_amount = $9,
-        payment_status = $10,
-        status = $11,
-        transaction_code = $12,
-        notes = $13,
-        updated_by = $14
-      WHERE id = $15
+        location_id = $2,
+        service_type = $3,
+        order_date = $4,
+        weight = $5,
+        items = $6,
+        subtotal = $7,
+        discount_amount = $8,
+        discount_reason = $9,
+        total_amount = $10,
+        payment_status = $11,
+        status = $12,
+        transaction_code = $13,
+        notes = $14,
+        updated_by = $15
+      WHERE id = $16
       RETURNING *
     `, [
       customer_id,
+      location_id,
       service_type,
       order_date,
       parseFloat(weight) || 0,
@@ -341,10 +360,13 @@ router.put('/:id', authenticateToken, async (req, res) => {
         c.name as customer_name,
         c.email as customer_email,
         c.phone as customer_phone,
+        l.id as location_id,
+        l.display_name as location_name,
         u.id as updated_by_user_id,
         u.name as updated_by_user_name
       FROM orders o
       LEFT JOIN customers c ON o.customer_id = c.id
+      LEFT JOIN locations l ON o.location_id = l.id
       LEFT JOIN users u ON o.updated_by = u.id
       WHERE o.id = $1
     `, [req.params.id]);
@@ -373,6 +395,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
         name: row.customer_name,
         email: row.customer_email,
         phone: row.customer_phone
+      } : null,
+      location: row.location_name ? {
+        id: row.location_id,
+        name: row.location_name
       } : null,
       updated_by_user: row.updated_by_user_name ? {
         id: row.updated_by_user_id,

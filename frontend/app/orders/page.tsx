@@ -16,6 +16,12 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Plus, Search, ArrowLeft, CreditCard as Edit, Trash2, Check, ChevronsUpDown, Receipt } from 'lucide-react';
 
+interface Location {
+  id: string;
+  name: string;
+  display_name: string;
+}
+
 interface Customer {
   id: string;
   name: string;
@@ -59,6 +65,10 @@ interface Order {
   created_at: string;
   updated_at?: string;
   customers: Customer;
+  location?: {
+    id: string;
+    name: string;
+  };
   updated_by_user?: {
     id: string;
     name: string;
@@ -71,6 +81,7 @@ export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1, limit: 10, total: 0, totalPages: 0, hasNext: false, hasPrev: false
   });
@@ -86,8 +97,10 @@ export default function Orders() {
   const [customerSearchValue, setCustomerSearchValue] = useState('');
   const [serviceSearchValue, setServiceSearchValue] = useState('');
   const [generatingReceipt, setGeneratingReceipt] = useState<string | null>(null);
+  const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false);
   const [newOrder, setNewOrder] = useState({
     customer_id: '',
+    location_id: '',
     service_type: '',
     order_date: new Date().toISOString().split('T')[0],
     weight: '',
@@ -121,6 +134,7 @@ export default function Orders() {
     fetchOrders();
     fetchCustomers();
     fetchServices();
+    fetchLocations();
   }, []);
 
   const fetchOrders = async (page = 1, limit = 10, search = '', status = '', paymentStatus = '') => {
@@ -186,6 +200,24 @@ export default function Orders() {
     }
   };
 
+  const fetchLocations = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/locations', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setLocations(data);
+      }
+    } catch (error) {
+      console.error('Error fetching locations:', error);
+    }
+  };
+
   const fetchServices = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -209,7 +241,7 @@ export default function Orders() {
     if (!service) return 0;
 
     let total = 0.00;
-
+    
     if (service.price_per_kg && weight > 0) {
       total += service.price_per_kg * weight;
     }
@@ -241,6 +273,7 @@ export default function Orders() {
 
   const handleWeightOrItemsChange = (field: string, value: string) => {
     const updatedOrder = { ...newOrder, [field]: value };
+    
     if (newOrder.service_type) {
       const service = services.find(s => s.display_name === newOrder.service_type);
       if (service) {
@@ -273,6 +306,11 @@ export default function Orders() {
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!newOrder.location_id) {
+      alert('Location is required');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       const response = await fetch('/api/orders', {
@@ -305,6 +343,11 @@ export default function Orders() {
     e.preventDefault();
     if (!editingOrder) return;
     
+    if (!newOrder.location_id) {
+      alert('Location is required');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/orders/${editingOrder.id}`, {
@@ -337,6 +380,7 @@ export default function Orders() {
     setEditingOrder(order);
     setNewOrder({
       customer_id: order.customer_id,
+      location_id: order.location?.id || '',
       service_type: order.service_type,
       order_date: order.order_date ? new Date(order.order_date).toISOString().split('T')[0] : new Date(order.created_at).toISOString().split('T')[0],
       weight: order.weight.toString(),
@@ -393,14 +437,16 @@ export default function Orders() {
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          customer_id: order.customers.id,
-          order_date: order.order_date
+          // customer_id: order.customers.id,
+          // order_date: order.order_date
+          orderId: order.id
         }),
       });
 
       if (response.ok) {
         const result = await response.json();
         
+        // Download the receipt
         const downloadResponse = await fetch(`/api/receipts/download/${result.filename}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -437,6 +483,7 @@ export default function Orders() {
   const resetForm = () => {
     setNewOrder({
       customer_id: '',
+      location_id: '',
       service_type: '',
       order_date: new Date().toISOString().split('T')[0],
       weight: '',
@@ -540,6 +587,40 @@ export default function Orders() {
                 </DialogHeader>
                 <div className="max-h-[80vh] overflow-y-auto">
                   <form onSubmit={handleCreateOrder} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="location">Location *</Label>
+                      <div className="relative">
+                        <Input
+                          value={locations.find(l => l.id === newOrder.location_id)?.display_name || ''}
+                          placeholder="Select location..."
+                          readOnly
+                          onClick={() => setIsLocationDropdownOpen(!isLocationDropdownOpen)}
+                          className="cursor-pointer"
+                        />
+                        {isLocationDropdownOpen && (
+                          <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto">
+                            {locations.map((location) => (
+                              <div
+                                key={location.id}
+                                className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                                onClick={() => {
+                                  setNewOrder({...newOrder, location_id: location.id});
+                                  setIsLocationDropdownOpen(false);
+                                }}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium">{location.display_name}</span>
+                                  {newOrder.location_id === location.id && (
+                                    <Check className="h-4 w-4 text-blue-600" />
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     {/* Customer Selection */}
                     <div className="space-y-2">
                       <Label>Customer</Label>
@@ -881,7 +962,6 @@ export default function Orders() {
           </CardContent>
         </Card>
 
-
         {/* Orders Table */}
         <Card>
           <CardHeader>
@@ -895,6 +975,11 @@ export default function Orders() {
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-base truncate">{order.customers?.name || 'Unknown Customer'}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className="text-xs">
+                          {order.location?.name || 'Unknown'}
+                        </Badge>
+                      </div>
                       <p className="text-sm text-gray-600 truncate">{order.service_type}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <Badge className={getStatusColor(order.status)} variant="secondary">
@@ -920,6 +1005,11 @@ export default function Orders() {
                       {order.transaction_code && (
                         <div className="text-xs text-blue-600 mt-1">
                           {order.transaction_code}
+                        </div>
+                      )}
+                      {order.location && (
+                        <div className="text-xs text-blue-600 mt-1">
+                          {order.location.name}
                         </div>
                       )}
                     </div>
@@ -981,6 +1071,7 @@ export default function Orders() {
                   <TableRow>
                     <TableHead>Customer</TableHead>
                     <TableHead>Service</TableHead>
+                    <TableHead>Location</TableHead>
                     <TableHead>Details</TableHead>
                     <TableHead>Order Date</TableHead>
                     <TableHead>Amount</TableHead>
@@ -1000,9 +1091,23 @@ export default function Orders() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{order.service_type}</div>
-                        {order.notes && (
-                          <div className="text-xs text-gray-500 truncate max-w-32">{order.notes}</div>
+                        <div className="max-w-xs lg:max-w-sm">
+                          <p className="text-sm font-medium truncate">{order.service_type}</p>
+                          {order.weight > 0 && (
+                            <p className="text-xs text-gray-600">{order.weight}kg</p>
+                          )}
+                          {order.items > 0 && (
+                            <p className="text-xs text-gray-600">{order.items} items</p>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {order.location ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {order.location.name.replace('Luku Safi Laundromat ', '')}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -1127,6 +1232,40 @@ export default function Orders() {
           </DialogHeader>
           <div className="max-h-[80vh] overflow-y-auto">
             <form onSubmit={handleEditOrder} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit_location">Location *</Label>
+                <div className="relative">
+                  <Input
+                    value={locations.find(l => l.id === newOrder.location_id)?.display_name || ''}
+                    placeholder="Select location..."
+                    readOnly
+                    onClick={() => setIsLocationDropdownOpen(!isLocationDropdownOpen)}
+                    className="cursor-pointer"
+                  />
+                  {isLocationDropdownOpen && (
+                    <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto">
+                      {locations.map((location) => (
+                        <div
+                          key={location.id}
+                          className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                          onClick={() => {
+                            setNewOrder({...newOrder, location_id: location.id});
+                            setIsLocationDropdownOpen(false);
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{location.display_name}</span>
+                            {newOrder.location_id === location.id && (
+                              <Check className="h-4 w-4 text-blue-600" />
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Customer Selection */}
               <div className="space-y-2">
                 <Label>Customer</Label>

@@ -11,7 +11,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { SmartPagination } from '@/components/ui/pagination';
+import { Badge } from '@/components/ui/badge';
 import { Plus, Search, ArrowLeft, Trash2, CreditCard as Edit } from 'lucide-react';
+
+interface Location {
+  id: string;
+  name: string;
+  display_name: string;
+}
 
 interface Expense {
   id: string;
@@ -26,6 +33,7 @@ interface Expense {
     name: string;
   };
   transaction_code?: string;
+  location: Location;
 }
 
 interface PaginationInfo {
@@ -39,6 +47,7 @@ interface PaginationInfo {
 
 export default function Expenses() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [locations, setLocations] = useState<any[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1, limit: 10, total: 0, totalPages: 0, hasNext: false, hasPrev: false
   });
@@ -49,6 +58,7 @@ export default function Expenses() {
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [newExpense, setNewExpense] = useState({
     category: '',
+    location_id: '',
     description: '',
     amount: '',
     date: new Date().toISOString().split('T')[0],
@@ -87,7 +97,26 @@ export default function Expenses() {
     }
 
     fetchExpenses();
+    fetchLocations();
   }, []);
+
+  const fetchLocations = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/locations', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setLocations(data);
+      }
+    } catch (error) {
+      console.error('Error fetching locations:', error);
+    }
+  };
 
   const fetchExpenses = async (page = 1, limit = 10, search = '', category = '') => {
     try {
@@ -148,6 +177,7 @@ export default function Expenses() {
         setIsCreateDialogOpen(false);
         setNewExpense({
           category: '',
+          location_id: '',
           description: '',
           amount: '',
           date: new Date().toISOString().split('T')[0],
@@ -179,6 +209,7 @@ export default function Expenses() {
         setEditingExpense(null);
         setNewExpense({
           category: '',
+          location_id: '',
           description: '',
           amount: '',
           date: new Date().toISOString().split('T')[0],
@@ -194,6 +225,7 @@ export default function Expenses() {
     setEditingExpense(expense);
     setNewExpense({
       category: expense.category,
+      location_id: expense.location?.id || '',
       description: expense.description,
       amount: expense.amount.toString(),
       date: expense.date,
@@ -278,6 +310,22 @@ export default function Expenses() {
                 </DialogHeader>
                 <div className="max-h-[80vh] overflow-y-auto">
                   <form onSubmit={handleCreateExpense} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="location">Location *</Label>
+                    <Select value={newExpense.location_id} onValueChange={(value) => setNewExpense({...newExpense, location_id: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {locations.map((location) => (
+                          <SelectItem key={location.id} value={location.id}>
+                            {location.display_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="category">Category</Label>
                     <Select value={newExpense.category} onValueChange={(value) => setNewExpense({...newExpense, category: value})}>
@@ -424,7 +472,7 @@ export default function Expenses() {
         {/* Expenses Table */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg sm:text-xl">Expenses ({expenses.length})</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">Expenses</CardTitle>
           </CardHeader>
           <CardContent>
             {/* Mobile Card View */}
@@ -434,6 +482,9 @@ export default function Expenses() {
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="outline" className="text-xs">
+                          {expense.location?.name || 'Unknown'}
+                        </Badge>
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           {expense.category}
                         </span>
@@ -499,6 +550,7 @@ export default function Expenses() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
+                    <TableHead>Location</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead>Transaction</TableHead>
@@ -512,6 +564,11 @@ export default function Expenses() {
                     <TableRow key={expense.id}>
                       <TableCell className="text-sm">
                         {new Date(expense.date).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {expense.location?.name || 'Unknown'}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -599,6 +656,22 @@ export default function Expenses() {
           </DialogHeader>
           <div className="max-h-[80vh] overflow-y-auto">
             <form onSubmit={handleEditExpense} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit_location">Location *</Label>
+              <Select value={newExpense.location_id} onValueChange={(value) => setNewExpense({...newExpense, location_id: value})}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select location" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.display_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="edit_category">Category</Label>
               <Select value={newExpense.category} onValueChange={(value) => setNewExpense({...newExpense, category: value})}>

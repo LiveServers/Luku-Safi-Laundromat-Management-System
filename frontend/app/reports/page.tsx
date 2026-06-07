@@ -21,11 +21,19 @@ interface MonthlyReport {
   totalOrders: number;
 }
 
+interface Location {
+  id: string;
+  name: string;
+  display_name: string;
+}
+
 export default function Reports() {
   const [report, setReport] = useState<MonthlyReport | null>(null);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedLocation, setSelectedLocation] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -41,13 +49,39 @@ export default function Reports() {
       router.push('/');
       return;
     }
+
+    fetchLocations();
   }, []);
+
+  const fetchLocations = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/locations', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setLocations(data);
+      }
+    } catch (error) {
+      console.error('Error fetching locations:', error);
+    }
+  };
 
   const fetchReport = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/analytics/monthly-report?month=${selectedMonth}&year=${selectedYear}`, {
+      const params = new URLSearchParams({
+        month: selectedMonth.toString(),
+        year: selectedYear.toString(),
+        ...(selectedLocation && { location_id: selectedLocation })
+      });
+      
+      const response = await fetch(`/api/analytics/monthly-report?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -77,17 +111,18 @@ export default function Reports() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${filename}_${selectedYear}_${selectedMonth.toString().padStart(2, '0')}.csv`;
+    const locationSuffix = selectedLocation ? `_${locations.find(l => l.id === selectedLocation)?.name || 'location'}` : '_all_locations';
+    a.download = `${filename}_${selectedYear}_${selectedMonth.toString().padStart(2, '0')}${locationSuffix}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
 
   const downloadOrdersReport = () => {
     if (!report) return;
-    
     const ordersData = report.orders.map(order => ({
-      date: new Date(order.order_date).toLocaleDateString(),
-      customer: order?.customer_name || 'Unknown',
+      date: new Date(order.created_at).toLocaleDateString(),
+      customer: order.customer_name || 'Unknown',
+      location: order.location_name || 'Unknown',
       service: order.service_type,
       amount: order.total_amount,
       payment_status: order.payment_status,
@@ -97,22 +132,22 @@ export default function Reports() {
     }));
 
     downloadCSV(ordersData, 'orders_report', [
-      'Date', 'Customer', 'Service', 'Amount', 'Payment Status', 'Status', 'Items', 'Weight'
+      'Date', 'Customer', 'Location', 'Service', 'Amount', 'Payment Status', 'Status', 'Items', 'Weight'
     ]);
   };
 
   const downloadExpensesReport = () => {
     if (!report) return;
-    
     const expensesData = report.expenses.map(expense => ({
       date: new Date(expense.date).toLocaleDateString(),
+      location: expense.location?.name || 'Unknown',
       category: expense.category,
       description: expense.description,
       amount: expense.amount
     }));
 
     downloadCSV(expensesData, 'expenses_report', [
-      'Date', 'Category', 'Description', 'Amount'
+      'Date', 'Location', 'Category', 'Description', 'Amount'
     ]);
   };
 
@@ -121,6 +156,7 @@ export default function Reports() {
     
     const revenueData = [{
       month: report.month,
+      location: selectedLocation ? locations.find(l => l.id === selectedLocation)?.display_name || 'Unknown' : 'All Locations',
       total_revenue: report.revenue,
       total_expenses: report.totalExpenses,
       profit: report.profit,
@@ -130,7 +166,7 @@ export default function Reports() {
     }];
 
     downloadCSV(revenueData, 'revenue_report', [
-      'Month', 'Total Revenue', 'Total Expenses', 'Profit', 'Total Orders', 'New Customers', 'Returning Customers'
+      'Month', 'Location', 'Total Revenue', 'Total Expenses', 'Profit', 'Total Orders', 'New Customers', 'Returning Customers'
     ]);
   };
 
@@ -157,6 +193,7 @@ export default function Reports() {
   ];
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -187,7 +224,29 @@ export default function Reports() {
         {/* Report Filters */}
         <Card className="mb-6">
           <CardContent className="pt-6">
-            <div className="flex flex-row gap-4 items-end flex-wrap sm:flex-nowrap">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+              <div className="flex-1">
+                <label className="block text-sm font-medium mb-2">Location</label>
+                <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Locations" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {
+                      Array.isArray(locations) && locations.length && (
+                        <>
+                          <SelectItem value={locations[0].id}>All Locations</SelectItem>
+                          {locations.map((location) => (
+                            <SelectItem key={location.id} value={location.id}>
+                              {location.display_name}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )
+                    }
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex-1">
                 <label className="block text-sm font-medium mb-2">Month</label>
                 <Select value={selectedMonth.toString()} onValueChange={(value) => setSelectedMonth(parseInt(value))}>
@@ -218,7 +277,7 @@ export default function Reports() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={fetchReport} disabled={loading}>
+              <Button onClick={fetchReport} disabled={loading} className="w-full sm:w-auto">
                 {loading ? 'Loading...' : 'Generate Report'}
               </Button>
             </div>
@@ -227,6 +286,20 @@ export default function Reports() {
 
         {report && (
           <>
+            {/* Location Info */}
+            {selectedLocation && (
+              <Card className="mb-6">
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <Badge variant="outline" className="text-lg px-4 py-2">
+                      {locations.find(l => l.id === selectedLocation)?.display_name || 'Selected Location'}
+                    </Badge>
+                    <p className="text-sm text-gray-600 mt-2">Report filtered for this location</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <Card>

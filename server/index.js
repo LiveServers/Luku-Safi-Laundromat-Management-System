@@ -11,14 +11,19 @@ const customersRoutes = require('./routes/customers');
 const analyticsRoutes = require('./routes/analytics');
 const servicesRoutes = require('./routes/services');
 const receiptsRoutes = require('./routes/receipts');
+const locationsRoutes = require('./routes/locations');
 
 const app = express();
 const PORT = process.env.PORT;
 
 // Middleware
 app.use(helmet());
+// app.use(cors({
+//   origin: "*",
+// }));
 app.use(cors({
-  origin: "*",
+  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  credentials: true
 }));
 
 app.use(morgan('combined'));
@@ -33,6 +38,7 @@ app.use('/api/customers', customersRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/services', servicesRoutes);
 app.use('/api/receipts', receiptsRoutes);
+app.use('/api/locations', locationsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

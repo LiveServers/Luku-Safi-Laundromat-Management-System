@@ -12,10 +12,12 @@ class ReceiptGenerator {
   }
 
   async generateReceipt(receiptData) {
+    console.log("THIS IS RECEIPT DATA", receiptData.location)
     return new Promise((resolve, reject) => {
       try {
         const {
           customer,
+          location,
           orders,
           receiptDate,
           receiptNumber,
@@ -45,7 +47,7 @@ class ReceiptGenerator {
         doc.pipe(stream);
 
         // Header
-        this.addHeader(doc);
+        this.addHeader(doc, location);
         
         // Customer Info
         this.addCustomerInfo(doc, customer, receiptDate, receiptNumber);
@@ -81,26 +83,33 @@ class ReceiptGenerator {
     });
   }
 
-  addHeader(doc) {
+  addHeader(doc, location) {
+    // Business Header
     doc.fontSize(24)
        .font('Helvetica-Bold')
-       .text('Luku Safi Laundromat', 50, 50, { align: 'center' });
+       .text(location?.display_name || 'Luku Safi Laundromat', 50, 50, { align: 'center' });
     
     doc.fontSize(12)
        .font('Helvetica')
-       .text('Professional Laundry Services', 50, 80, { align: 'center' })
-       .text('Phone: +254 708 718 595 | Email: lukusafilaundromat@gmail.com', 50, 95, { align: 'center' });
+       .text('Professional Laundry', 50, 80, { align: 'center' })
+       .text(`Phone: ${location?.phone || '+254 708718595'} | Email: lukusafilaundromat@gmail.com`, 50, 95, { align: 'center' });
+
+    // Payment Details
+    if (location?.paybill_number && location?.account_number) {
+      doc.fontSize(11)
+         .text(`Paybill: ${location.paybill_number} | Account: ${location.account_number}`, 50, 110, { align: 'center' });
+    }
 
     // Divider line
-    doc.moveTo(50, 120)
-       .lineTo(545, 120)
+    doc.moveTo(50, 130)
+       .lineTo(545, 130)
        .stroke();
 
     return doc;
   }
 
   addCustomerInfo(doc, customer, receiptDate, receiptNumber) {
-    const startY = 140;
+    const startY = 150;
     
     // Receipt title
     doc.fontSize(18)
