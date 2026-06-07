@@ -20,14 +20,14 @@ router.get('/', authenticateToken, async (req, res) => {
 
     if (search) {
       paramCount++;
-      whereClause += ` WHERE (name ILIKE $${paramCount} OR email ILIKE $${paramCount} OR phone ILIKE $${paramCount})`;
+      whereClause += ` WHERE (c.name ILIKE $${paramCount} OR c.email ILIKE $${paramCount} OR c.phone ILIKE $${paramCount})`;
       queryParams.push(`%${search}%`);
     }
 
     // Get total count
     const countQuery = `
       SELECT COUNT(*) as total
-      FROM customers
+      FROM customers c
       ${whereClause}
     `;
     const countResult = await db.query(countQuery, queryParams);
@@ -35,14 +35,28 @@ router.get('/', authenticateToken, async (req, res) => {
 
     // Get paginated results
     const result = await db.query(
-      `SELECT * FROM customers ${whereClause} ORDER BY name LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
+      `SELECT c.*, l.id as location_id, l.display_name as location_name 
+       FROM customers c 
+       LEFT JOIN locations l ON c.location_id = l.id 
+       ${whereClause} ORDER BY c.name LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
       [...queryParams, limit, offset]
     );
 
     const totalPages = Math.ceil(total / limit);
 
     res.json({
-      customers: result.rows,
+      customers: result.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        phone: row.phone,
+        address: row.address,
+        created_at: row.created_at,
+        location: row.location_name ? {
+          id: row.location_id,
+          name: row.location_name
+        } : null
+      })),
       pagination: {
         page,
         limit,
@@ -85,7 +99,7 @@ router.get('/:id/history', authenticateToken, async (req, res) => {
 
     // Calculate analytics
     const totalSpent = orders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0);
-    const totalOrders = customerFrequencyCalculator(orders)[customerId].customerFrequency || 0;
+    const totalOrders = customerFrequencyCalculator(orders)[customerId]?.customerFrequency || 0;
     const averageOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
     
     // Calculate monthly spending
@@ -144,7 +158,7 @@ function getWeekNumber(date) {
 // Create customer
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { name, email, phone, address } = req.body;
+    const { name, email, phone, address, location_id } = req.body;
     const customers = await db.query(
       'SELECT * FROM customers ORDER BY name'
     );
@@ -154,8 +168,8 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     const result = await db.query(
-      'INSERT INTO customers (name, email, phone, address) VALUES ($1, $2, $3, $4) RETURNING *',
-      [name, email, phone, address]
+      'INSERT INTO customers (name, email, phone, address, location_id) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [name, email, phone, address, location_id]
     );
 
     res.status(201).json(result.rows[0]);
@@ -168,11 +182,11 @@ router.post('/', authenticateToken, async (req, res) => {
 // Update customer
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { name, email, phone, address } = req.body;
+    const { name, email, phone, address, location_id } = req.body;
 
     const result = await db.query(
-      'UPDATE customers SET name = $1, email = $2, phone = $3, address = $4 WHERE id = $5 RETURNING *',
-      [name, email, phone, address, req.params.id]
+      'UPDATE customers SET name = $1, email = $2, phone = $3, address = $4, location_id = $5 WHERE id = $6 RETURNING *',
+      [name, email, phone, address, location_id, req.params.id]
     );
 
     if (result.rows.length === 0) {

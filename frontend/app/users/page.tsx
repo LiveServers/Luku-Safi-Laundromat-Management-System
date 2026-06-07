@@ -12,20 +12,29 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Plus, ArrowLeft, Users, Shield, User } from 'lucide-react';
 
+interface Location {
+  id: string;
+  name: string;
+  display_name: string;
+}
+
 interface SystemUser {
   id: string;
   name: string;
   email: string;
   role: string;
   created_at: string;
+  location: Location;
 }
 
 export default function UsersManagement() {
   const [users, setUsers] = useState<SystemUser[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newUser, setNewUser] = useState({
     name: '',
+    location_id: '',
     email: '',
     password: '',
     role: 'attendant'
@@ -47,7 +56,26 @@ export default function UsersManagement() {
     }
 
     fetchUsers();
+    fetchLocations();
   }, []);
+
+  const fetchLocations = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/locations', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setLocations(data);
+      }
+    } catch (error) {
+      console.error('Error fetching locations:', error);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -93,6 +121,7 @@ export default function UsersManagement() {
         setIsCreateDialogOpen(false);
         setNewUser({
           name: '',
+          location_id: '',
           email: '',
           password: '',
           role: 'attendant'
@@ -164,6 +193,22 @@ export default function UsersManagement() {
                 </DialogHeader>
                 <div className="max-h-[80vh] overflow-y-auto">
                   <form onSubmit={handleCreateUser} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="location">Location *</Label>
+                    <Select value={newUser.location_id} onValueChange={(value) => setNewUser({...newUser, location_id: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {locations.map((location) => (
+                          <SelectItem key={location.id} value={location.id}>
+                            {location.display_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="name">Full Name</Label>
                     <Input
@@ -315,6 +360,7 @@ export default function UsersManagement() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Location</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Created</TableHead>
@@ -328,6 +374,11 @@ export default function UsersManagement() {
                       <TableRow key={user.id}>
                         <TableCell>
                           <div className="font-medium">{user.name}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {user.location?.name || 'Unknown'}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <div className="text-sm text-gray-600">{user.email}</div>

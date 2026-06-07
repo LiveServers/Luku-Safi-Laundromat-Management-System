@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
 import { DollarSign, Package, Users, Clock, TrendingUp, TrendingDown } from 'lucide-react';
@@ -26,8 +27,16 @@ interface ChartData {
   amount?: number;
 }
 
+interface Location {
+  id: string;
+  name: string;
+  display_name: string;
+}
+
 export default function Dashboard() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState('');
   const [revenueChart, setRevenueChart] = useState<ChartData[]>([]);
   const [expensesChart, setExpensesChart] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +53,7 @@ export default function Dashboard() {
     }
 
     setUserRole(user.role || '');
+    fetchLocations();
     fetchDashboardData();
     if (user.role === 'owner') {
       fetchChartData();
@@ -52,10 +62,38 @@ export default function Dashboard() {
     }
   }, []);
 
+  useEffect(() => {
+    if (locations.length > 0) {
+      fetchDashboardData();
+      if (userRole === 'owner') {
+        fetchChartData();
+      }
+    }
+  }, [selectedLocation]);
+
+  const fetchLocations = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/locations', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setLocations(data);
+      }
+    } catch (error) {
+      console.error('Error fetching locations:', error);
+    }
+  };
+
   const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/analytics/dashboard', {
+      const params = selectedLocation ? `?location_id=${selectedLocation}` : '';
+      const response = await fetch(`/api/analytics/dashboard${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -73,12 +111,13 @@ export default function Dashboard() {
   const fetchChartData = async () => {
     try {
       const token = localStorage.getItem('token');
+      const params = selectedLocation ? `?location_id=${selectedLocation}` : '';
       
       const [revenueResponse, expensesResponse] = await Promise.all([
-        fetch('/api/analytics/revenue-chart', {
+        fetch(`/api/analytics/revenue-chart${params}`, {
           headers: { 'Authorization': `Bearer ${token}` },
         }),
-        fetch('/api/analytics/expenses-chart', {
+        fetch(`/api/analytics/expenses-chart${params}`, {
           headers: { 'Authorization': `Bearer ${token}` },
         }),
       ]);
@@ -130,6 +169,31 @@ export default function Dashboard() {
               <p className="text-sm sm:text-base text-gray-600 hidden sm:block">Dashboard Overview</p>
             </div>
             
+            {/* Location Filter */}
+            {userRole === 'owner' && locations.length > 0 && (
+              <div className="hidden md:block">
+                <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="All Locations" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {
+                      Array.isArray(locations) && locations.length && (
+                        <>
+                          <SelectItem value={locations[0].id}>All Locations</SelectItem>
+                          {locations.map((location) => (
+                            <SelectItem key={location.id} value={location.id}>
+                              {location.display_name}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )
+                    }
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {/* Mobile Menu Button */}
             <div className="md:hidden">
               <Button
@@ -162,6 +226,30 @@ export default function Dashboard() {
           {isMobileMenuOpen && (
             <div className="md:hidden border-t bg-white py-4">
               <div className="flex flex-col space-y-2">
+                {/* Mobile Location Filter */}
+                {userRole === 'owner' && locations.length > 0 && (
+                  <div className="px-4 pb-2">
+                    <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Locations" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {
+                          Array.isArray(locations) && locations.length && (
+                            <>
+                              <SelectItem value={locations[0].id}>All Locations</SelectItem>
+                              {locations.map((location) => (
+                                <SelectItem key={location.id} value={location.id}>
+                                  {location.display_name}
+                                </SelectItem>
+                              ))}
+                            </>
+                          )
+                        }
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <Button onClick={() => { router.push('/orders'); setIsMobileMenuOpen(false); }} variant="ghost" className="justify-start">Orders</Button>
                 <Button onClick={() => { router.push('/customers'); setIsMobileMenuOpen(false); }} variant="ghost" className="justify-start">Customers</Button>
                 {userRole === 'owner' && (
@@ -179,6 +267,20 @@ export default function Dashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        {/* Location Info */}
+        {selectedLocation && (
+          <Card className="mb-6">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <Badge variant="outline" className="text-lg px-4 py-2">
+                  {locations.find(l => l.id === selectedLocation)?.display_name || 'Selected Location'}
+                </Badge>
+                <p className="text-sm text-gray-600 mt-2">Dashboard filtered for this location</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {userRole === 'owner' && (

@@ -43,9 +43,12 @@ router.get('/', authenticateToken, async (req, res) => {
     const result = await db.query(`
       SELECT 
         e.*,
+        l.id as location_id,
+        l.display_name as location_name,
         u.id as updated_by_user_id,
         u.name as updated_by_user_name
       FROM expenses e
+      LEFT JOIN locations l ON e.location_id = l.id
       LEFT JOIN users u ON e.updated_by = u.id
       ${whereClause}
       ORDER BY e.date DESC, e.created_at DESC
@@ -64,6 +67,10 @@ router.get('/', authenticateToken, async (req, res) => {
       transaction_code: row.transaction_code,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      location: row.location_name ? {
+        id: row.location_id,
+        name: row.location_name
+      } : null,
       updated_by_user: row.updated_by_user_name ? {
         id: row.updated_by_user_id,
         name: row.updated_by_user_name
@@ -90,11 +97,11 @@ router.get('/', authenticateToken, async (req, res) => {
 // Create expense
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { category, description, amount, date, transaction_code } = req.body;
+    const { category, description, amount, date, transaction_code, location_id } = req.body;
 
     const result = await db.query(
-      'INSERT INTO expenses (category, description, amount, date, transaction_code) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [category, description, parseFloat(amount), date || new Date().toISOString().split('T')[0], transaction_code]
+      'INSERT INTO expenses (category, description, amount, date, transaction_code, location_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [category, description, parseFloat(amount), date || new Date().toISOString().split('T')[0], transaction_code, location_id]
     );
 
     res.status(201).json(result.rows[0]);
@@ -107,7 +114,7 @@ router.post('/', authenticateToken, async (req, res) => {
 // Update expense
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { category, description, amount, date, transaction_code } = req.body;
+    const { category, description, amount, date, transaction_code, location_id } = req.body;
 
     const result = await db.query(`
       UPDATE expenses SET 
@@ -116,10 +123,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
         amount = $3,
         date = $4,
         transaction_code = $5,
-        updated_by = $6
-      WHERE id = $7
+        location_id = $6,
+        updated_by = $7
+      WHERE id = $8
       RETURNING *
-    `, [category, description, parseFloat(amount), date, transaction_code, req.user.id, req.params.id]);
+    `, [category, description, parseFloat(amount), date, transaction_code, location_id, req.user.id, req.params.id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Expense not found' });
@@ -129,9 +137,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const expenseResult = await db.query(`
       SELECT 
         e.*,
+        l.id as location_id,
+        l.display_name as location_name,
         u.id as updated_by_user_id,
         u.name as updated_by_user_name
       FROM expenses e
+      LEFT JOIN locations l ON e.location_id = l.id
       LEFT JOIN users u ON e.updated_by = u.id
       WHERE e.id = $1
     `, [req.params.id]);
@@ -146,6 +157,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
       transaction_code: row.transaction_code,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      location: row.location_name ? {
+        id: row.location_id,
+        name: row.location_name
+      } : null,
       updated_by_user: row.updated_by_user_name ? {
         id: row.updated_by_user_id,
         name: row.updated_by_user_name

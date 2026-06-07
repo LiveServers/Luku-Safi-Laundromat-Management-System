@@ -16,6 +16,12 @@ import { SmartPagination } from '@/components/ui/pagination';
 import { Plus, Search, ArrowLeft, Mail, Phone, Eye, TrendingUp, Calendar, DollarSign } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
+interface Location {
+  id: string;
+  name: string;
+  display_name: string;
+}
+
 interface Customer {
   id: string;
   name: string;
@@ -23,6 +29,7 @@ interface Customer {
   phone?: string;
   address?: string;
   created_at: string;
+  location: Location;
 }
 
 interface PaginationInfo {
@@ -50,6 +57,7 @@ interface CustomerHistory {
 }
 export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1, limit: 10, total: 0, totalPages: 0, hasNext: false, hasPrev: false
   });
@@ -60,6 +68,7 @@ export default function Customers() {
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     name: '',
+    location_id: '',
     email: '',
     phone: '',
     address: ''
@@ -75,7 +84,26 @@ export default function Customers() {
     }
 
     fetchCustomers();
+    fetchLocations();
   }, []);
+
+  const fetchLocations = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/locations', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setLocations(data);
+      }
+    } catch (error) {
+      console.error('Error fetching locations:', error);
+    }
+  };
 
   const fetchCustomers = async (page = 1, limit = 10, search = '') => {
     try {
@@ -136,11 +164,11 @@ export default function Customers() {
         setIsCreateDialogOpen(false);
         setNewCustomer({
           name: '',
+          location_id: '',
           email: '',
           phone: '',
           address: ''
         });
-        
       }else if(response.status === 400){
         const data = await response.json();
         setError(data.error || 'Failed to create customer. Please check your input.');
@@ -241,6 +269,22 @@ export default function Customers() {
                 </DialogHeader>
                 <div className="max-h-[80vh] overflow-y-auto">
                   <form onSubmit={handleCreateCustomer} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="location">Location *</Label>
+                    <Select value={newCustomer.location_id} onValueChange={(value) => setNewCustomer({...newCustomer, location_id: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {locations.map((location) => (
+                          <SelectItem key={location.id} value={location.id}>
+                            {location.display_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="name">Full Name</Label>
                     <Input
@@ -351,6 +395,11 @@ export default function Customers() {
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-base truncate">{customer.name}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className="text-xs">
+                          {customer.location?.name || 'Unknown'}
+                        </Badge>
+                      </div>
                       <div className="space-y-1 mt-1">
                         {customer.email && (
                           <div className="flex items-center text-sm text-gray-600">
@@ -396,6 +445,7 @@ export default function Customers() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Location</TableHead>
                     <TableHead>Contact Information</TableHead>
                     <TableHead>Address</TableHead>
                     <TableHead>Joined</TableHead>
@@ -407,6 +457,11 @@ export default function Customers() {
                     <TableRow key={customer.id}>
                       <TableCell>
                         <div className="font-medium">{customer.name}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {customer.location?.name || 'Unknown'}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
@@ -576,7 +631,7 @@ export default function Customers() {
                     )}
                   </div>
                 </CardContent>
-              </Card>
+                </Card>
               {/* Charts and Order History */}
               <Tabs defaultValue="orders" className="space-y-4">
                 <TabsList>
