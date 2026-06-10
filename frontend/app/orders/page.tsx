@@ -977,11 +977,11 @@ export default function Orders() {
                       <p className="font-medium text-base truncate">{order.customers?.name || 'Unknown Customer'}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <Badge variant="outline" className="text-xs">
-                          {order.location?.name || 'Unknown'}
+                          {order.location?.name.replace('Luku Safi Laundromat ', '')}
                         </Badge>
                       </div>
                       <p className="text-sm text-gray-600 truncate">{order.service_type}</p>
-                      <div className="flex items-center gap-2 mt-2">
+                      <div className="flex items-center gap-2 mt-6">
                         <Badge className={getStatusColor(order.status)} variant="secondary">
                           {order.status}
                         </Badge>
@@ -1009,7 +1009,7 @@ export default function Orders() {
                       )}
                       {order.location && (
                         <div className="text-xs text-blue-600 mt-1">
-                          {order.location.name}
+                          {order.location.name.replace('Luku Safi Laundromat ', '')}
                         </div>
                       )}
                     </div>
