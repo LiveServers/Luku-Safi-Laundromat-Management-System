@@ -14,7 +14,7 @@ import { SmartPagination } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Search, ArrowLeft, CreditCard as Edit, Trash2, Check, ChevronsUpDown, Receipt } from 'lucide-react';
+import { Plus, Search, ArrowLeft, CreditCard as Edit, Trash2, Check, ChevronsUpDown, Receipt, Clock } from 'lucide-react';
 
 interface Location {
   id: string;
@@ -49,6 +49,14 @@ interface Service {
   requires_items: boolean;
 }
 
+interface MembershipPlan {
+  id: string;
+  name: string;
+  display_name: string;
+  kg_allowance: number;
+  price: number;
+}
+
 interface Order {
   id: string;
   customer_id: string;
@@ -75,6 +83,7 @@ interface Order {
   };
   order_date?: string;
   transaction_code?: string;
+  membership_kg_used?: number;
 }
 
 export default function Orders() {
@@ -82,13 +91,16 @@ export default function Orders() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [membershipPlans, setMembershipPlans] = useState<MembershipPlan[]>([]);
+  const [customerKgRemaining, setCustomerKgRemaining] = useState(0);
+  const [incompleteOrders, setIncompleteOrders] = useState<Order[]>([]);
+  const [incompleteCount, setIncompleteCount] = useState(0);
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1, limit: 10, total: 0, totalPages: 0, hasNext: false, hasPrev: false
   });
-  const [paymentStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('incomplete');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -112,7 +124,9 @@ export default function Orders() {
     payment_status: 'pending',
     transaction_code: '',
     notes: '',
-    status: 'received'
+    status: 'received',
+    purchase_plan_id: 'none',
+    use_membership: true
   });
   const router = useRouter();
 
@@ -131,10 +145,12 @@ export default function Orders() {
       return;
     }
 
-    fetchOrders();
+    fetchOrders(1, 10, '', 'incomplete', '');
+    fetchIncompleteOrders();
     fetchCustomers();
     fetchServices();
     fetchLocations();
+    fetchMembershipPlans();
   }, []);
 
   const fetchOrders = async (page = 1, limit = 10, search = '', status = '', paymentStatus = '') => {
@@ -171,11 +187,11 @@ export default function Orders() {
   // };
 
   const handlePageChange = (page: number) => {
-    fetchOrders(page, pagination.limit, searchTerm, statusFilter, paymentStatusFilter);
+    fetchOrders(page, pagination.limit, searchTerm, statusFilter, paymentFilter);
   };
 
   const handleLimitChange = (limit: number) => {
-    fetchOrders(1, limit, searchTerm, statusFilter, paymentStatusFilter);
+    fetchOrders(1, limit, searchTerm, statusFilter, paymentFilter);
   };
 
   const fetchCustomers = async () => {
@@ -236,71 +252,131 @@ export default function Orders() {
     }
   };
 
+  const fetchMembershipPlans = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/memberships/plans', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (response.ok) {
+        setMembershipPlans(await response.json());
+      }
+    } catch (error) {
+      console.error('Error fetching membership plans:', error);
+    }
+  };
+
+  const fetchIncompleteOrders = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams({ page: '1', limit: '100', status: 'incomplete' });
+      const response = await fetch(`/api/orders?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setIncompleteOrders(data.orders || []);
+        setIncompleteCount(data.pagination?.total || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching incomplete orders:', error);
+    }
+  };
+
+  const fetchCustomerMembership = async (customerId: string) => {
+    if (!customerId) {
+      setCustomerKgRemaining(0);
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/memberships/customer/${customerId}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCustomerKgRemaining(data.kgRemaining || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching customer membership:', error);
+      setCustomerKgRemaining(0);
+    }
+  };
+
   const calculatePricing = (serviceId: string, weight: number, items: number) => {
     const service = services.find(s => s.id === serviceId);
-    if (!service) return 0;
+    if (!service) return { laundrySubtotal: 0, kgCharge: 0, itemsCharge: 0 };
 
-    let total = 0.00;
-    
-    if (service.price_per_kg && weight > 0) {
-      total += service.price_per_kg * weight;
-    }
-    
-    if (service.price_per_item && items > 0) {
-      total += service.price_per_item * items;
+    const kgCharge = service.price_per_kg && weight > 0 ? service.price_per_kg * weight : 0;
+    const itemsCharge = service.price_per_item && items > 0 ? service.price_per_item * items : 0;
+
+    return { laundrySubtotal: kgCharge + itemsCharge, kgCharge, itemsCharge };
+  };
+
+  const applyTotals = (order: typeof newOrder, serviceId?: string) => {
+    const service = services.find(s => s.id === serviceId || s.display_name === order.service_type);
+    const weight = parseFloat(order.weight) || 0;
+    const items = parseInt(order.items) || 0;
+    const pricing = service ? calculatePricing(service.id, weight, items) : { laundrySubtotal: parseFloat(order.subtotal) || 0, kgCharge: 0, itemsCharge: 0 };
+    const purchasePlan = membershipPlans.find(plan => plan.id === order.purchase_plan_id);
+    const availableKg = (order.use_membership ? customerKgRemaining : 0) + (purchasePlan ? purchasePlan.kg_allowance : 0);
+    const coveredKg = Math.min(weight, availableKg);
+    const uncoveredKg = Math.max(0, weight - coveredKg);
+
+    let laundryCharge = pricing.laundrySubtotal;
+    if (weight > 0 && coveredKg > 0) {
+      const uncoveredKgCharge = pricing.kgCharge > 0 ? (uncoveredKg / weight) * pricing.kgCharge : 0;
+      laundryCharge = pricing.itemsCharge + uncoveredKgCharge;
     }
 
-    return total;
+    const planPrice = purchasePlan ? purchasePlan.price : 0;
+    const membershipActive = Boolean(purchasePlan || (order.use_membership && customerKgRemaining > 0));
+    const autoDiscount = Math.max(0, pricing.laundrySubtotal - laundryCharge);
+    const discountAmount = membershipActive ? autoDiscount : (parseFloat(order.discount_amount) || 0);
+    const totalAmount = membershipActive
+      ? laundryCharge + planPrice
+      : Math.max(0, pricing.laundrySubtotal - discountAmount);
+
+    let discountReason = order.discount_reason;
+    if (membershipActive) {
+      const parts = [];
+      if (purchasePlan) parts.push(purchasePlan.display_name);
+      if (coveredKg > 0) parts.push(`${coveredKg.toFixed(1)}kg covered`);
+      discountReason = parts.join(' · ');
+    }
+
+    return {
+      ...order,
+      subtotal: pricing.laundrySubtotal.toString(),
+      discount_amount: discountAmount.toString(),
+      discount_reason: discountReason,
+      total_amount: Math.max(0, totalAmount).toString()
+    };
   };
 
   const handleServiceChange = (serviceId: string) => {
     const service = services.find(s => s.id === serviceId);
     if (service) {
-      const weight = parseFloat(newOrder.weight) || 0;
-      const items = parseInt(newOrder.items) || 0;
-      const subtotal = calculatePricing(serviceId, weight, items);
-      const discountAmount = parseFloat(newOrder.discount_amount) || 0;
-      const totalAmount = subtotal - discountAmount;
-
-      setNewOrder({
-        ...newOrder,
-        service_type: service.display_name,
-        subtotal: subtotal.toString(),
-        total_amount: Math.max(0, totalAmount).toString()
-      });
+      setNewOrder(applyTotals({ ...newOrder, service_type: service.display_name }, serviceId));
     }
   };
 
   const handleWeightOrItemsChange = (field: string, value: string) => {
-    const updatedOrder = { ...newOrder, [field]: value };
-    
-    if (newOrder.service_type) {
-      const service = services.find(s => s.display_name === newOrder.service_type);
-      if (service) {
-        const weight = parseFloat(field === 'weight' ? value : updatedOrder.weight) || 0;
-        const items = parseInt(field === 'items' ? value : updatedOrder.items) || 0;
-        const subtotal = calculatePricing(service.id, weight, items);
-        const discountAmount = parseFloat(updatedOrder.discount_amount) || 0;
-        const totalAmount = subtotal - discountAmount;
-
-        updatedOrder.subtotal = subtotal.toString();
-        updatedOrder.total_amount = Math.max(0, totalAmount).toString();
-      }
-    }
-    
-    setNewOrder(updatedOrder);
+    setNewOrder(applyTotals({ ...newOrder, [field]: value }));
   };
 
   const handleDiscountChange = (value: string) => {
-    const discountAmount = parseFloat(value) || 0;
     const subtotal = parseFloat(newOrder.subtotal) || 0;
-    const totalAmount = subtotal - discountAmount;
-
+    const discountAmount = parseFloat(value) || 0;
     setNewOrder({
       ...newOrder,
       discount_amount: value,
-      total_amount: Math.max(0, totalAmount).toString()
+      total_amount: Math.max(0, subtotal - discountAmount).toString()
     });
+  };
+
+  const handleMembershipChange = (updates: Partial<typeof newOrder>) => {
+    setNewOrder(applyTotals({ ...newOrder, ...updates }));
   };
 
   const handleCreateOrder = async (e: React.FormEvent) => {
@@ -325,12 +401,15 @@ export default function Orders() {
           items: parseInt(newOrder.items) || 0,
           subtotal: parseFloat(newOrder.subtotal) || 0,
           discount_amount: parseFloat(newOrder.discount_amount) || 0,
-          total_amount: parseFloat(newOrder.total_amount) || 0
+          total_amount: parseFloat(newOrder.total_amount) || 0,
+          purchase_plan_id: newOrder.purchase_plan_id === 'none' ? null : newOrder.purchase_plan_id,
+          use_membership: Boolean(newOrder.use_membership && (customerKgRemaining > 0 || newOrder.purchase_plan_id !== 'none'))
         }),
       });
 
       if (response.ok) {
-        fetchOrders(pagination.page, pagination.limit, searchTerm, statusFilter, paymentStatusFilter);
+        fetchOrders(pagination.page, pagination.limit, searchTerm, statusFilter, paymentFilter);
+        fetchIncompleteOrders();
         setIsCreateDialogOpen(false);
         resetForm();
       }
@@ -367,7 +446,8 @@ export default function Orders() {
       });
 
       if (response.ok) {
-        fetchOrders(pagination.page, pagination.limit, searchTerm, statusFilter, paymentStatusFilter);
+        fetchOrders(pagination.page, pagination.limit, searchTerm, statusFilter, paymentFilter);
+        fetchIncompleteOrders();
         setEditingOrder(null);
         resetForm();
       }
@@ -392,7 +472,9 @@ export default function Orders() {
       payment_status: order.payment_status,
       status: order.status,
       transaction_code: order.transaction_code || '',
-      notes: order.notes || ''
+      notes: order.notes || '',
+      purchase_plan_id: 'none',
+      use_membership: false
     });
     setCustomerSearchValue('');
     setServiceSearchValue('');
@@ -413,7 +495,8 @@ export default function Orders() {
       });
 
       if (response.ok) {
-        fetchOrders(pagination.page, pagination.limit, searchTerm, statusFilter, paymentStatusFilter);
+        fetchOrders(pagination.page, pagination.limit, searchTerm, statusFilter, paymentFilter);
+        fetchIncompleteOrders();
       }
     } catch (error) {
       console.error('Error deleting order:', error);
@@ -495,8 +578,11 @@ export default function Orders() {
       payment_status: 'pending',
       status: 'received',
       transaction_code: '',
-      notes: ''
+      notes: '',
+      purchase_plan_id: 'none',
+      use_membership: true
     });
+    setCustomerKgRemaining(0);
     setCustomerSearchValue('');
     setServiceSearchValue('');
   };
@@ -505,9 +591,10 @@ export default function Orders() {
     const matchesSearch = order.customers?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          order.service_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          order.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' || statusFilter === 'incomplete' || order.status === statusFilter;
     const matchesPayment = paymentFilter === 'all' || order.payment_status === paymentFilter;
-    return matchesSearch && matchesStatus && matchesPayment;
+    const matchesIncomplete = statusFilter !== 'incomplete' || !['completed', 'cancelled'].includes(order.status);
+    return matchesSearch && matchesStatus && matchesPayment && matchesIncomplete;
   });
 
   const formatCurrency = (amount: number) => {
@@ -655,6 +742,7 @@ export default function Orders() {
                                   onSelect={() => {
                                     setNewOrder({...newOrder, customer_id: customer.id});
                                     setCustomerSearchOpen(false);
+                                    fetchCustomerMembership(customer.id);
                                   }}
                                 >
                                   <Check
@@ -675,6 +763,45 @@ export default function Orders() {
                         </PopoverContent>
                       </Popover>
                     </div>
+
+                    {newOrder.customer_id && (
+                      <div className="space-y-3 rounded-md border p-3 bg-blue-50">
+                        <div>
+                          <Label>Membership Plan</Label>
+                          <p className="text-xs text-gray-600 mt-1">
+                            {customerKgRemaining > 0
+                              ? `${customerKgRemaining.toFixed(1)} kg remaining on this customer`
+                              : 'No unused membership kg on this customer'}
+                          </p>
+                        </div>
+                        <Select
+                          value={newOrder.purchase_plan_id}
+                          onValueChange={(value) => handleMembershipChange({ purchase_plan_id: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Regular pricing" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Regular pricing</SelectItem>
+                            {membershipPlans.map((plan) => (
+                              <SelectItem key={plan.id} value={plan.id}>
+                                {plan.display_name} — KES {plan.price.toLocaleString()}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {customerKgRemaining > 0 && (
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={newOrder.use_membership}
+                              onChange={(e) => handleMembershipChange({ use_membership: e.target.checked })}
+                            />
+                            Use remaining membership kg on this order
+                          </label>
+                        )}
+                      </div>
+                    )}
 
                     {/* Service Selection */}
                     <div className="space-y-2">
@@ -886,6 +1013,43 @@ export default function Orders() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        {incompleteCount > 0 && statusFilter !== 'incomplete' && (
+          <Card className="mb-4 sm:mb-6 border-orange-200 bg-orange-50">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                <Clock className="h-5 w-5 text-orange-600" />
+                Incomplete orders ({incompleteCount})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-700 mb-3">
+                These orders are still in progress and are easy to miss in the full list.
+              </p>
+              <div className="space-y-2 mb-4">
+                {incompleteOrders.slice(0, 8).map((order) => (
+                  <div key={order.id} className="flex justify-between items-center gap-3 text-sm bg-white rounded-md px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{order.customers?.name || 'Unknown'}</p>
+                      <p className="text-xs text-gray-500 truncate">{order.service_type} · {order.status}</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => startEdit(order)}>
+                      Update
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setStatusFilter('incomplete');
+                  fetchOrders(1, pagination.limit, searchTerm, 'incomplete', paymentFilter);
+                }}
+              >
+                View all incomplete orders
+              </Button>
+            </CardContent>
+          </Card>
+        )}
         {/* Results Summary */}
         <Card className="mb-4 sm:mb-6">
           <CardContent className="pt-4 sm:pt-6">
@@ -931,11 +1095,15 @@ export default function Orders() {
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <Select value={statusFilter} onValueChange={(value) => {
+                  setStatusFilter(value);
+                  fetchOrders(1, pagination.limit, searchTerm, value, paymentFilter);
+                }}>
                   <SelectTrigger className="w-full sm:w-40">
                     <SelectValue placeholder="Filter by status" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="incomplete">Incomplete</SelectItem>
                     <SelectItem value="all">All Statuses</SelectItem>
                     {orderStatuses.map((status) => (
                       <SelectItem key={status} value={status}>
@@ -944,7 +1112,10 @@ export default function Orders() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+                <Select value={paymentFilter} onValueChange={(value) => {
+                  setPaymentFilter(value);
+                  fetchOrders(1, pagination.limit, searchTerm, statusFilter, value);
+                }}>
                   <SelectTrigger className="w-full sm:w-40">
                     <SelectValue placeholder="Filter by payment" />
                   </SelectTrigger>
