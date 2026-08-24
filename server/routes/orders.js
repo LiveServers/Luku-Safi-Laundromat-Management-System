@@ -4,6 +4,97 @@ const { authenticateToken, requireOwner } = require('../middleware');
 
 const router = express.Router();
 
+function mapOrderRow(row) {
+  return {
+    id: row.id,
+    customer_id: row.customer_id,
+    service_type: row.service_type,
+    order_date: row.order_date,
+    weight: parseFloat(row.weight),
+    items: row.items,
+    subtotal: parseFloat(row.subtotal),
+    discount_amount: parseFloat(row.discount_amount),
+    discount_reason: row.discount_reason,
+    total_amount: parseFloat(row.total_amount),
+    payment_status: row.payment_status,
+    status: row.status,
+    transaction_code: row.transaction_code,
+    notes: row.notes,
+    created_at: row.created_at,
+    completed_at: row.completed_at,
+    updated_at: row.updated_at,
+    membership_id: row.membership_id || null,
+    membership_kg_used: parseFloat(row.membership_kg_used) || 0,
+    purchased_membership_id: row.purchased_membership_id || null,
+    customers: row.customer_name ? {
+      id: row.customer_id,
+      name: row.customer_name,
+      email: row.customer_email,
+      phone: row.customer_phone
+    } : null,
+    location: row.location_name ? {
+      id: row.location_id,
+      name: row.location_name
+    } : null,
+    updated_by_user: row.updated_by_user_name ? {
+      id: row.updated_by_user_id,
+      name: row.updated_by_user_name
+    } : null
+  };
+}
+
+async function debitMembershipKg(client, customerId, kgNeeded) {
+  if (!kgNeeded || kgNeeded <= 0) {
+    return { kgUsed: 0, membershipId: null };
+  }
+
+  const memberships = await client.query(
+    `SELECT * FROM customer_memberships
+     WHERE customer_id = $1 AND status = 'active' AND kg_remaining > 0
+     ORDER BY created_at ASC`,
+    [customerId]
+  );
+
+  let remaining = kgNeeded;
+  let membershipId = null;
+
+  for (const membership of memberships.rows) {
+    if (remaining <= 0) break;
+    const available = parseFloat(membership.kg_remaining);
+    const take = Math.min(remaining, available);
+    const nextRemaining = available - take;
+
+    await client.query(
+      `UPDATE customer_memberships
+       SET kg_remaining = $1, status = $2
+       WHERE id = $3`,
+      [nextRemaining, nextRemaining <= 0 ? 'depleted' : 'active', membership.id]
+    );
+
+    if (!membershipId) membershipId = membership.id;
+    remaining -= take;
+  }
+
+  return { kgUsed: kgNeeded - remaining, membershipId };
+}
+
+const ORDER_SELECT = `
+  SELECT
+    o.*,
+    c.id as customer_id,
+    c.name as customer_name,
+    c.email as customer_email,
+    c.phone as customer_phone,
+    l.id as location_id,
+    l.display_name as location_name,
+    u.id as updated_by_user_id,
+    u.name as updated_by_user_name
+  FROM orders o
+  LEFT JOIN customers c ON o.customer_id = c.id
+  LEFT JOIN locations l ON o.location_id = l.id
+  LEFT JOIN users u ON o.updated_by = u.id
+`;
+
 // Get all orders
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -25,7 +116,11 @@ router.get('/', authenticateToken, async (req, res) => {
       queryParams.push(`%${search}%`);
     }
 
-    if (status) {
+    if (status === 'incomplete') {
+      whereClause += whereClause
+        ? ` AND o.status NOT IN ('completed', 'cancelled')`
+        : ` WHERE o.status NOT IN ('completed', 'cancelled')`;
+    } else if (status) {
       paramCount++;
       whereClause += whereClause ? ` AND o.status = $${paramCount}` : ` WHERE o.status = $${paramCount}`;
       queryParams.push(status);
@@ -47,67 +142,17 @@ router.get('/', authenticateToken, async (req, res) => {
     const countResult = await db.query(countQuery, queryParams);
     const total = parseInt(countResult.rows[0].total);
 
-    // Get paginated results
     const result = await db.query(`
-      SELECT 
-        o.*,
-        c.id as customer_id,
-        c.name as customer_name,
-        c.email as customer_email,
-        c.phone as customer_phone,
-        l.id as location_id,
-        l.display_name as location_name,
-        u.id as updated_by_user_id,
-        u.name as updated_by_user_name
-      FROM orders o
-      LEFT JOIN customers c ON o.customer_id = c.id
-      LEFT JOIN locations l ON o.location_id = l.id
-      LEFT JOIN users u ON o.updated_by = u.id
+      ${ORDER_SELECT}
       ${whereClause}
-      ORDER BY o.order_date DESC
+      ORDER BY
+        CASE WHEN o.status IN ('completed', 'cancelled') THEN 1 ELSE 0 END,
+        o.order_date DESC
       LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
     `, [...queryParams, limit, offset]);
 
-    if(result.rows.length === 0) {
-      return res.status(404).json({ error: 'No orders found' });
-    }
-
     const totalPages = Math.ceil(total / limit);
-
-    // Transform the result to match the expected structure
-    const orders = result.rows.map(row => ({
-      id: row.id,
-      customer_id: row.customer_id,
-      service_type: row.service_type,
-      order_date: row.order_date,
-      weight: parseFloat(row.weight),
-      items: row.items,
-      subtotal: parseFloat(row.subtotal),
-      discount_amount: parseFloat(row.discount_amount),
-      discount_reason: row.discount_reason,
-      total_amount: parseFloat(row.total_amount),
-      payment_status: row.payment_status,
-      status: row.status,
-      transaction_code: row.transaction_code,
-      notes: row.notes,
-      created_at: row.created_at,
-      completed_at: row.completed_at,
-      updated_at: row.updated_at,
-      customers: row.customer_name ? {
-        id: row.customer_id,
-        name: row.customer_name,
-        email: row.customer_email,
-        phone: row.customer_phone
-      } : null,
-      location: row.location_name ? {
-        id: row.location_id,
-        name: row.location_name
-      } : null,
-      updated_by_user: row.updated_by_user_name ? {
-        id: row.updated_by_user_id,
-        name: row.updated_by_user_name
-      } : null
-    }));
+    const orders = result.rows.map(mapOrderRow);
 
     res.json({
       orders,
@@ -129,64 +174,13 @@ router.get('/', authenticateToken, async (req, res) => {
 // Get single order
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const result = await db.query(`
-      SELECT 
-        o.*,
-        c.id as customer_id,
-        c.name as customer_name,
-        c.email as customer_email,
-        c.phone as customer_phone,
-        l.id as location_id,
-        l.display_name as location_name,
-        u.id as updated_by_user_id,
-        u.name as updated_by_user_name
-      FROM orders o
-      LEFT JOIN customers c ON o.customer_id = c.id
-      LEFT JOIN locations l ON o.location_id = l.id
-      LEFT JOIN users u ON o.updated_by = u.id
-      WHERE o.id = $1
-    `, [req.params.id]);
+    const result = await db.query(`${ORDER_SELECT} WHERE o.id = $1`, [req.params.id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    const row = result.rows[0];
-    const order = {
-      id: row.id,
-      customer_id: row.customer_id,
-      service_type: row.service_type,
-      order_date: row.order_date,
-      weight: parseFloat(row.weight),
-      items: row.items,
-      subtotal: parseFloat(row.subtotal),
-      discount_amount: parseFloat(row.discount_amount),
-      discount_reason: row.discount_reason,
-      total_amount: parseFloat(row.total_amount),
-      payment_status: row.payment_status,
-      status: row.status,
-      transaction_code: row.transaction_code,
-      notes: row.notes,
-      created_at: row.created_at,
-      completed_at: row.completed_at,
-      updated_at: row.updated_at,
-      customers: row.customer_name ? {
-        id: row.customer_id,
-        name: row.customer_name,
-        email: row.customer_email,
-        phone: row.customer_phone
-      } : null,
-      location: row.location_name ? {
-        id: row.location_id,
-        name: row.location_name
-      } : null,
-      updated_by_user: row.updated_by_user_name ? {
-        id: row.updated_by_user_id,
-        name: row.updated_by_user_name
-      } : null
-    };
-
-    res.json(order);
+    res.json(mapOrderRow(result.rows[0]));
   } catch (error) {
     console.error('Get order error:', error);
     res.status(500).json({ error: error.message });
@@ -210,80 +204,80 @@ router.post('/', authenticateToken, async (req, res) => {
       payment_status,
       status,
       transaction_code,
-      notes
+      notes,
+      purchase_plan_id,
+      use_membership
     } = req.body;
 
-    const result = await db.query(`
-      INSERT INTO orders (
-        customer_id, location_id, service_type, order_date, weight, items, 
-        subtotal, discount_amount, discount_reason, total_amount, 
-        payment_status, status, transaction_code, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-      RETURNING *
-    `, [
-      customer_id,
-      location_id,
-      service_type,
-      order_date || new Date().toISOString().split('T')[0],
-      parseFloat(weight) || 0,
-      parseInt(items) || 0,
-      parseFloat(subtotal) || 0,
-      parseFloat(discount_amount) || 0,
-      discount_reason,
-      parseFloat(total_amount),
-      payment_status || 'pending',
-      status || 'received',
-      transaction_code,
-      notes
-    ]);
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
 
-    // Get the created order with customer details
-    const orderResult = await db.query(`
-      SELECT 
-        o.*,
-        c.id as customer_id,
-        c.name as customer_name,
-        c.email as customer_email,
-        c.phone as customer_phone,
-        l.id as location_id,
-        l.display_name as location_name
-      FROM orders o
-      LEFT JOIN customers c ON o.customer_id = c.id
-      LEFT JOIN locations l ON o.location_id = l.id
-      WHERE o.id = $1
-    `, [result.rows[0].id]);
+      let purchasedMembershipId = null;
+      if (purchase_plan_id) {
+        const planResult = await client.query(
+          'SELECT * FROM membership_plans WHERE id = $1 AND is_active = true',
+          [purchase_plan_id]
+        );
+        if (planResult.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'Membership plan not found' });
+        }
+        const plan = planResult.rows[0];
+        const membershipResult = await client.query(
+          `INSERT INTO customer_memberships (customer_id, plan_id, kg_total, kg_remaining, status)
+           VALUES ($1, $2, $3, $3, 'active') RETURNING *`,
+          [customer_id, plan.id, parseFloat(plan.kg_allowance)]
+        );
+        purchasedMembershipId = membershipResult.rows[0].id;
+      }
 
-    const row = orderResult.rows[0];
-    const order = {
-      id: row.id,
-      customer_id: row.customer_id,
-      service_type: row.service_type,
-      order_date: row.order_date,
-      weight: parseFloat(row.weight),
-      items: row.items,
-      subtotal: parseFloat(row.subtotal),
-      discount_amount: parseFloat(row.discount_amount),
-      discount_reason: row.discount_reason,
-      total_amount: parseFloat(row.total_amount),
-      payment_status: row.payment_status,
-      status: row.status,
-      transaction_code: row.transaction_code,
-      notes: row.notes,
-      created_at: row.created_at,
-      completed_at: row.completed_at,
-      customers: row.customer_name ? {
-        id: row.customer_id,
-        name: row.customer_name,
-        email: row.customer_email,
-        phone: row.customer_phone
-      } : null,
-      location: row.location_name ? {
-        id: row.location_id,
-        name: row.location_name
-      } : null
-    };
+      let membershipId = null;
+      let membershipKgUsed = 0;
+      if (use_membership || purchase_plan_id) {
+        const debit = await debitMembershipKg(client, customer_id, parseFloat(weight) || 0);
+        membershipId = debit.membershipId;
+        membershipKgUsed = debit.kgUsed;
+      }
 
-    res.status(201).json(order);
+      const result = await client.query(`
+        INSERT INTO orders (
+          customer_id, location_id, service_type, order_date, weight, items,
+          subtotal, discount_amount, discount_reason, total_amount,
+          payment_status, status, transaction_code, notes,
+          membership_id, membership_kg_used, purchased_membership_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        RETURNING *
+      `, [
+        customer_id,
+        location_id,
+        service_type,
+        order_date || new Date().toISOString().split('T')[0],
+        parseFloat(weight) || 0,
+        parseInt(items) || 0,
+        parseFloat(subtotal) || 0,
+        parseFloat(discount_amount) || 0,
+        discount_reason,
+        parseFloat(total_amount),
+        payment_status || 'pending',
+        status || 'received',
+        transaction_code,
+        notes,
+        membershipId,
+        membershipKgUsed,
+        purchasedMembershipId
+      ]);
+
+      await client.query('COMMIT');
+
+      const orderResult = await db.query(`${ORDER_SELECT} WHERE o.id = $1`, [result.rows[0].id]);
+      res.status(201).json(mapOrderRow(orderResult.rows[0]));
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error) {
     console.error('Create order error:', error);
     res.status(500).json({ error: error.message });
@@ -352,61 +346,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    // Get the updated order with customer details
-    const orderResult = await db.query(`
-      SELECT 
-        o.*,
-        c.id as customer_id,
-        c.name as customer_name,
-        c.email as customer_email,
-        c.phone as customer_phone,
-        l.id as location_id,
-        l.display_name as location_name,
-        u.id as updated_by_user_id,
-        u.name as updated_by_user_name
-      FROM orders o
-      LEFT JOIN customers c ON o.customer_id = c.id
-      LEFT JOIN locations l ON o.location_id = l.id
-      LEFT JOIN users u ON o.updated_by = u.id
-      WHERE o.id = $1
-    `, [req.params.id]);
-
-    const row = orderResult.rows[0];
-    const order = {
-      id: row.id,
-      customer_id: row.customer_id,
-      service_type: row.service_type,
-      order_date: row.order_date,
-      weight: parseFloat(row.weight),
-      items: row.items,
-      subtotal: parseFloat(row.subtotal),
-      discount_amount: parseFloat(row.discount_amount),
-      discount_reason: row.discount_reason,
-      total_amount: parseFloat(row.total_amount),
-      payment_status: row.payment_status,
-      status: row.status,
-      transaction_code: row.transaction_code,
-      notes: row.notes,
-      created_at: row.created_at,
-      completed_at: row.completed_at,
-      updated_at: row.updated_at,
-      customers: row.customer_name ? {
-        id: row.customer_id,
-        name: row.customer_name,
-        email: row.customer_email,
-        phone: row.customer_phone
-      } : null,
-      location: row.location_name ? {
-        id: row.location_id,
-        name: row.location_name
-      } : null,
-      updated_by_user: row.updated_by_user_name ? {
-        id: row.updated_by_user_id,
-        name: row.updated_by_user_name
-      } : null
-    };
-
-    res.json(order);
+    const orderResult = await db.query(`${ORDER_SELECT} WHERE o.id = $1`, [req.params.id]);
+    res.json(mapOrderRow(orderResult.rows[0]));
   } catch (error) {
     console.error('Update order error:', error);
     res.status(500).json({ error: error.message });

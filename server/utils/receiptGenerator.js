@@ -12,7 +12,6 @@ class ReceiptGenerator {
   }
 
   async generateReceipt(receiptData) {
-    console.log("THIS IS RECEIPT DATA", receiptData.location)
     return new Promise((resolve, reject) => {
       try {
         const {

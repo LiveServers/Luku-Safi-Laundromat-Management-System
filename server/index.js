@@ -12,6 +12,7 @@ const analyticsRoutes = require('./routes/analytics');
 const servicesRoutes = require('./routes/services');
 const receiptsRoutes = require('./routes/receipts');
 const locationsRoutes = require('./routes/locations');
+const membershipsRoutes = require('./routes/memberships');
 
 const app = express();
 const PORT = process.env.PORT;
@@ -39,6 +40,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/services', servicesRoutes);
 app.use('/api/receipts', receiptsRoutes);
 app.use('/api/locations', locationsRoutes);
+app.use('/api/memberships', membershipsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
