@@ -23,6 +23,69 @@ const {
 
 const pendingCreates = new Map();
 
+let botStarted = false;
+let shuttingDown = false;
+let activeBot = null;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isConflictError(error) {
+  return (
+    error?.errorCode === 409 ||
+    /terminated by other getUpdates request/i.test(error?.description || error?.message || '')
+  );
+}
+
+function attachShutdownHandlers(bot) {
+  const stop = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log('[telegram-expenses] Stopping polling...');
+    bot.stop();
+  };
+
+  process.once('SIGTERM', stop);
+  process.once('SIGINT', stop);
+}
+
+async function runPollingLoop(bot) {
+  let waitMs = 8000;
+
+  while (!shuttingDown) {
+    try {
+      await bot.api.deleteWebhook({ drop_pending_updates: false });
+      waitMs = 8000;
+      console.log('[telegram-expenses] Polling for updates.');
+      await bot.startPolling(undefined, {
+        timeout: 25,
+        retry: true,
+        retryDelayMs: 2000,
+        onError: (error) => {
+          console.warn('[telegram-expenses] transient polling error:', error.message);
+        },
+      });
+      if (!shuttingDown) {
+        console.warn('[telegram-expenses] Polling stopped unexpectedly. Restarting...');
+      }
+    } catch (error) {
+      if (shuttingDown) return;
+
+      if (isConflictError(error)) {
+        console.warn(
+          `[telegram-expenses] Telegram 409: another getUpdates is already running for this bot token. Waiting ${Math.round(waitMs / 1000)}s before retrying. Keep only one backend instance polling.`
+        );
+      } else {
+        console.error('[telegram-expenses] polling failed:', error.message || error);
+      }
+
+      await sleep(waitMs);
+      waitMs = Math.min(Math.round(waitMs * 1.5), 35000);
+    }
+  }
+}
+
 function allowedUserIds() {
   return String(process.env.TELEGRAM_ALLOWED_USER_IDS || '')
     .split(',')
@@ -120,6 +183,11 @@ async function parseExpenseMessage(text) {
 }
 
 async function initTelegramExpenseBot() {
+  if (botStarted) {
+    console.log('[telegram-expenses] Bot already started in this process.');
+    return activeBot;
+  }
+
   if (!process.env.TELEGRAM_BOT_TOKEN) {
     console.log('[telegram-expenses] Bot disabled: TELEGRAM_BOT_TOKEN is missing.');
     return null;
@@ -131,8 +199,9 @@ async function initTelegramExpenseBot() {
     );
   }
 
+  botStarted = true;
   const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN);
-  bot.startPolling();
+  activeBot = bot;
 
   bot.hears(/^\/start(?:@\w+)?$/i, async (msg) => {
     console.log(`[telegram-expenses] /start from ${msg.from.username} (${msg.from.id})`);
@@ -360,11 +429,12 @@ async function initTelegramExpenseBot() {
     }
   });
 
-  bot.on('polling_error', (error) => {
-    console.error('[telegram-expenses] polling error:', error.message);
-  });
-
+  attachShutdownHandlers(bot);
   console.log('[telegram-expenses] Secure Telegram expense bot started.');
+  runPollingLoop(bot).catch((error) => {
+    console.error('[telegram-expenses] Polling loop stopped:', error);
+    botStarted = false;
+  });
   return bot;
 }
 

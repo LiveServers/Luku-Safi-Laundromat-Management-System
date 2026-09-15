@@ -64,7 +64,6 @@ app.use('*', (req, res) => {
 if (process.env.TELEGRAM_EXPENSE_BOT_ENABLED === 'true') {
   initTelegramExpenseBot().catch((error) => {
     console.error('Failed to start Telegram expense bot:', error);
-    process.exitCode = 1;
   });
 }
 
