@@ -36,7 +36,7 @@ export default function Login() {
       if (response.ok) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        router.push('/');
+        router.push(data.user.role === 'attendant' ? '/staff-activity' : '/');
       } else {
         setError(data.error || 'Login failed');
       }

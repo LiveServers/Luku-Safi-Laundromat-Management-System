@@ -13,6 +13,8 @@ const servicesRoutes = require('./routes/services');
 const receiptsRoutes = require('./routes/receipts');
 const locationsRoutes = require('./routes/locations');
 const membershipsRoutes = require('./routes/memberships');
+const staffActivityRoutes = require('./routes/staffActivity');
+const { ensureStaffActivitySchema } = require('./db/ensureStaffActivitySchema');
 
 // TELEGRAM
 const {initTelegramExpenseBot} = require('./services/telegram/telegramExpenseBot');
@@ -44,6 +46,7 @@ app.use('/api/services', servicesRoutes);
 app.use('/api/receipts', receiptsRoutes);
 app.use('/api/locations', locationsRoutes);
 app.use('/api/memberships', membershipsRoutes);
+app.use('/api/staff', staffActivityRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -64,12 +67,17 @@ app.use('*', (req, res) => {
 if (process.env.TELEGRAM_EXPENSE_BOT_ENABLED === 'true') {
   initTelegramExpenseBot().catch((error) => {
     console.error('Failed to start Telegram expense bot:', error);
-    process.exitCode = 1;
   });
 }
 
-app.listen('5000', () => {
-  console.log(`Server running on port 5000`);
-});
+ensureStaffActivitySchema()
+  .catch((error) => {
+    console.error('Failed to prepare staff activity schema:', error);
+  })
+  .finally(() => {
+    app.listen('5000', () => {
+      console.log(`Server running on port 5000`);
+    });
+  });
 
 module.exports = app;

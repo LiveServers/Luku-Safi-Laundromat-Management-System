@@ -254,7 +254,13 @@ export default function UsersManagement() {
                         <SelectItem value="attendant">
                           <div className="flex items-center">
                             <User className="h-4 w-4 mr-2" />
-                            Attendant
+                            Employee / Attendant
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="manager">
+                          <div className="flex items-center">
+                            <Shield className="h-4 w-4 mr-2" />
+                            Manager
                           </div>
                         </SelectItem>
                         <SelectItem value="owner">

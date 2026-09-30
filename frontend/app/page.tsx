@@ -209,6 +209,7 @@ export default function Dashboard() {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex space-x-2 lg:space-x-4">
+              <Button onClick={() => router.push('/staff-activity')} size="sm" className="text-xs lg:text-sm bg-emerald-700 hover:bg-emerald-800">Staff Activity</Button>
               <Button onClick={() => router.push('/orders')} size="sm" className="text-xs lg:text-sm">Orders</Button>
               <Button onClick={() => router.push('/customers')} variant="outline" size="sm" className="text-xs lg:text-sm">Customers</Button>
               {userRole === 'owner' && (
@@ -250,6 +251,7 @@ export default function Dashboard() {
                     </Select>
                   </div>
                 )}
+                <Button onClick={() => { router.push('/staff-activity'); setIsMobileMenuOpen(false); }} variant="ghost" className="justify-start">Staff Activity</Button>
                 <Button onClick={() => { router.push('/orders'); setIsMobileMenuOpen(false); }} variant="ghost" className="justify-start">Orders</Button>
                 <Button onClick={() => { router.push('/customers'); setIsMobileMenuOpen(false); }} variant="ghost" className="justify-start">Customers</Button>
                 {userRole === 'owner' && (

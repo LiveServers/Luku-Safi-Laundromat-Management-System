@@ -80,6 +80,10 @@ router.post('/login', async (req, res) => {
 
     const user = result.rows[0];
 
+    if (user.is_active === false) {
+      return res.status(403).json({ error: 'This account has been deactivated' });
+    }
+
     // Check password
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
@@ -100,7 +104,11 @@ router.post('/login', async (req, res) => {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role
+        role: user.role,
+        job_title: user.job_title,
+        location_id: user.location_id,
+        profile_photo_url: user.profile_photo_url,
+        is_active: user.is_active !== false
       }
     });
   } catch (error) {
@@ -149,7 +157,16 @@ router.post('/add-user', authenticateToken, requireOwner, async (req, res) => {
   }
 });
 
-// Get all users (owner only)
+router.get('/me', authenticateToken, async (req, res) => {
+  try {
+    const { publicUser } = require('../utils/staffActivity');
+    res.json({ user: publicUser(req.user) });
+  } catch (error) {
+    console.error('Get me error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/users', authenticateToken, requireOwner, async (req, res) => {
   try {
     const result = await db.query(

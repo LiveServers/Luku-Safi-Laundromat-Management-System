@@ -22,6 +22,10 @@ const authenticateToken = async (req, res, next) => {
       return res.status(403).json({ error: 'Invalid token' });
     }
 
+    if (result.rows[0].is_active === false) {
+      return res.status(403).json({ error: 'This account has been deactivated' });
+    }
+
     req.user = result.rows[0];
     next();
   } catch (error) {
