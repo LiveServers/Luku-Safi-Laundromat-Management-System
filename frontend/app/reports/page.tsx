@@ -8,6 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, Download, FileText, TrendingUp, Users, DollarSign, Scale } from 'lucide-react';
+import {
+  expenseCategoryTotalSchema,
+  expenseSchema,
+  rankedExpenseSchema,
+  type Expense,
+  type ExpenseCategoryTotal,
+  type RankedExpense,
+} from '@/lib/contracts/expenses';
+import { z } from 'zod';
 
 interface CustomerInsight {
   id: string;
@@ -29,7 +38,9 @@ interface PeriodReport {
   endDate: string;
   month: string;
   orders: any[];
-  expenses: any[];
+  expenses: Expense[];
+  expensesByCategory: ExpenseCategoryTotal[];
+  rankedExpenses: RankedExpense[];
   customers: CustomerInsight[];
   topByCash: CustomerInsight[];
   topByWeight: CustomerInsight[];
@@ -118,7 +129,12 @@ export default function Reports() {
 
       if (response.ok) {
         const data = await response.json();
-        setReport(data);
+        setReport({
+          ...data,
+          expenses: z.array(expenseSchema).parse(data.expenses ?? []),
+          expensesByCategory: z.array(expenseCategoryTotalSchema).parse(data.expensesByCategory ?? []),
+          rankedExpenses: z.array(rankedExpenseSchema).parse(data.rankedExpenses ?? []),
+        });
       }
     } catch (error) {
       console.error('Error fetching report:', error);
@@ -466,6 +482,93 @@ export default function Reports() {
                       <p className="text-xs text-gray-600">Total Orders</p>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Expenses by category</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(report.expensesByCategory || []).length === 0 ? (
+                    <p className="text-sm text-gray-500">No expenses in this period.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Rank</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead>Entries</TableHead>
+                            <TableHead>Share</TableHead>
+                            <TableHead>Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(report.expensesByCategory || []).map((row, index) => (
+                            <TableRow key={row.category}>
+                              <TableCell className="text-sm text-gray-600">{index + 1}</TableCell>
+                              <TableCell>
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  {row.category}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-sm">{row.count}</TableCell>
+                              <TableCell className="text-sm text-gray-600">{row.percent.toFixed(1)}%</TableCell>
+                              <TableCell className="font-medium text-red-600">{formatCurrency(row.total)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                  <p className="text-sm text-gray-600 mt-4 text-right">
+                    Period total: <span className="font-semibold text-red-600">{formatCurrency(report.totalExpenses)}</span>
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Expenses ranked highest to lowest</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(report.rankedExpenses || report.expenses || []).length === 0 ? (
+                    <p className="text-sm text-gray-500">No expenses in this period.</p>
+                  ) : (
+                    <div className="overflow-x-auto max-h-[420px]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Rank</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Location</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead>Amount</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(report.rankedExpenses || []).map((expense) => (
+                            <TableRow key={expense.id}>
+                              <TableCell className="text-sm font-medium">{expense.rank}</TableCell>
+                              <TableCell className="text-sm">{new Date(expense.date).toLocaleDateString()}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-xs">
+                                  {expense.location?.name || 'Unknown'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm">{expense.category}</TableCell>
+                              <TableCell className="text-sm">{expense.description}</TableCell>
+                              <TableCell className="font-medium text-red-600">{formatCurrency(expense.amount)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
