@@ -13,42 +13,24 @@ import { Textarea } from '@/components/ui/textarea';
 import { SmartPagination } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Search, ArrowLeft, Trash2, CreditCard as Edit } from 'lucide-react';
-
-interface Location {
-  id: string;
-  name: string;
-  display_name: string;
-}
-
-interface Expense {
-  id: string;
-  category: string;
-  description: string;
-  amount: number;
-  date: string;
-  created_at: string;
-  updated_at?: string;
-  updated_by_user?: {
-    id: string;
-    name: string;
-  };
-  transaction_code?: string;
-  location: Location;
-}
-
-interface PaginationInfo {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
-  hasNext: boolean;
-  hasPrev: boolean;
-}
+import { z } from 'zod';
+import { locationSchema } from '@/lib/contracts/core';
+import {
+  createExpense,
+  deleteExpense,
+  fetchExpenseList,
+  fetchExpenseSummary,
+  updateExpense,
+  type Expense,
+  type ExpenseLocation,
+  type ExpensePagination,
+  type ExpenseSummaryResponse,
+} from '@/lib/contracts/expenses';
 
 export default function Expenses() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [locations, setLocations] = useState<any[]>([]);
-  const [pagination, setPagination] = useState<PaginationInfo>({
+  const [locations, setLocations] = useState<ExpenseLocation[]>([]);
+  const [pagination, setPagination] = useState<ExpensePagination>({
     page: 1, limit: 10, total: 0, totalPages: 0, hasNext: false, hasPrev: false
   });
   const [loading, setLoading] = useState(true);
@@ -64,6 +46,11 @@ export default function Expenses() {
     date: new Date().toISOString().split('T')[0],
     transaction_code: ''
   });
+  const [summaryMonth, setSummaryMonth] = useState(new Date().getMonth() + 1);
+  const [summaryYear, setSummaryYear] = useState(new Date().getFullYear());
+  const [summaryLocation, setSummaryLocation] = useState('all');
+  const [summaryAllTime, setSummaryAllTime] = useState(false);
+  const [expenseSummary, setExpenseSummary] = useState<ExpenseSummaryResponse | null>(null);
   const router = useRouter();
 
   const expenseCategories = [
@@ -96,9 +83,13 @@ export default function Expenses() {
       return;
     }
 
-    fetchExpenses();
+    loadExpenses();
     fetchLocations();
   }, []);
+
+  useEffect(() => {
+    loadExpenseSummary();
+  }, [summaryMonth, summaryYear, summaryLocation, summaryAllTime]);
 
   const fetchLocations = async () => {
     try {
@@ -111,34 +102,23 @@ export default function Expenses() {
 
       if (response.ok) {
         const data = await response.json();
-        setLocations(data);
+        setLocations(z.array(locationSchema).parse(data));
       }
     } catch (error) {
       console.error('Error fetching locations:', error);
     }
   };
 
-  const fetchExpenses = async (page = 1, limit = 10, search = '', category = '') => {
+  const loadExpenses = async (page = 1, limit = 10, search = '', category = '') => {
     try {
-      const token = localStorage.getItem('token');
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
-        ...(search && { search }),
-        ...(category && category !== 'all' && { category })
+      const data = await fetchExpenseList({
+        page,
+        limit,
+        search,
+        category,
       });
-      
-      const response = await fetch(`/api/expenses?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setExpenses(data.expenses);
-        setPagination(data.pagination);
-      }
+      setExpenses(data.expenses);
+      setPagination(data.pagination);
     } catch (error) {
       console.error('Error fetching expenses:', error);
     } finally {
@@ -146,44 +126,48 @@ export default function Expenses() {
     }
   };
 
+  const loadExpenseSummary = async () => {
+    try {
+      const data = await fetchExpenseSummary({
+        month: summaryMonth,
+        year: summaryYear,
+        all_time: summaryAllTime ? 'true' : undefined,
+        location_id: summaryLocation !== 'all' ? summaryLocation : undefined,
+      });
+      setExpenseSummary(data);
+    } catch (error) {
+      console.error('Error fetching expense summary:', error);
+    }
+  };
+
   const handleSearch = () => {
-    fetchExpenses(1, pagination.limit, searchTerm, categoryFilter);
+    loadExpenses(1, pagination.limit, searchTerm, categoryFilter);
   };
 
   const handlePageChange = (page: number) => {
-    fetchExpenses(page, pagination.limit, searchTerm, categoryFilter);
+    loadExpenses(page, pagination.limit, searchTerm, categoryFilter);
   };
 
   const handleLimitChange = (limit: number) => {
-    fetchExpenses(1, limit, searchTerm, categoryFilter);
+    loadExpenses(1, limit, searchTerm, categoryFilter);
   };
 
   const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/expenses', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(newExpense),
+      await createExpense(newExpense);
+      loadExpenses(pagination.page, pagination.limit, searchTerm, categoryFilter);
+      loadExpenseSummary();
+      setIsCreateDialogOpen(false);
+      setNewExpense({
+        category: '',
+        location_id: '',
+        description: '',
+        amount: '',
+        date: new Date().toISOString().split('T')[0],
+        transaction_code: ''
       });
-
-      if (response.ok) {
-        fetchExpenses(pagination.page, pagination.limit, searchTerm, categoryFilter);
-        setIsCreateDialogOpen(false);
-        setNewExpense({
-          category: '',
-          location_id: '',
-          description: '',
-          amount: '',
-          date: new Date().toISOString().split('T')[0],
-          transaction_code: ''
-        });
-      }
     } catch (error) {
       console.error('Error creating expense:', error);
     }
@@ -194,28 +178,18 @@ export default function Expenses() {
     if (!editingExpense) return;
     
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/expenses/${editingExpense.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(newExpense),
+      await updateExpense(editingExpense.id, newExpense);
+      loadExpenses(pagination.page, pagination.limit, searchTerm, categoryFilter);
+      loadExpenseSummary();
+      setEditingExpense(null);
+      setNewExpense({
+        category: '',
+        location_id: '',
+        description: '',
+        amount: '',
+        date: new Date().toISOString().split('T')[0],
+        transaction_code: ''
       });
-
-      if (response.ok) {
-        fetchExpenses(pagination.page, pagination.limit, searchTerm, categoryFilter);
-        setEditingExpense(null);
-        setNewExpense({
-          category: '',
-          location_id: '',
-          description: '',
-          amount: '',
-          date: new Date().toISOString().split('T')[0],
-          transaction_code: ''
-        });
-      }
     } catch (error) {
       console.error('Error updating expense:', error);
     }
@@ -239,17 +213,9 @@ export default function Expenses() {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/expenses/${expenseId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        fetchExpenses(pagination.page, pagination.limit, searchTerm, categoryFilter);
-      }
+      await deleteExpense(expenseId);
+      loadExpenses(pagination.page, pagination.limit, searchTerm, categoryFilter);
+      loadExpenseSummary();
     } catch (error) {
       console.error('Error deleting expense:', error);
     }
@@ -263,6 +229,22 @@ export default function Expenses() {
       currency: 'KES',
     }).format(amount);
   };
+
+  const months = [
+    { value: 1, label: 'January' },
+    { value: 2, label: 'February' },
+    { value: 3, label: 'March' },
+    { value: 4, label: 'April' },
+    { value: 5, label: 'May' },
+    { value: 6, label: 'June' },
+    { value: 7, label: 'July' },
+    { value: 8, label: 'August' },
+    { value: 9, label: 'September' },
+    { value: 10, label: 'October' },
+    { value: 11, label: 'November' },
+    { value: 12, label: 'December' }
+  ];
+  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
 
   if (loading) {
     return (
@@ -404,6 +386,154 @@ export default function Expenses() {
               <p className="text-2xl sm:text-3xl font-bold text-red-600">
                 {formatCurrency(totalExpenses)}
               </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-4 sm:mb-6">
+          <CardHeader>
+            <CardTitle className="text-lg sm:text-xl">Category totals by month</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Select
+                value={summaryAllTime ? 'all' : 'month'}
+                onValueChange={(value) => setSummaryAllTime(value === 'all')}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="month">Selected month</SelectItem>
+                  <SelectItem value="all">All recorded expenses</SelectItem>
+                </SelectContent>
+              </Select>
+              {!summaryAllTime && (
+                <>
+                  <Select value={summaryMonth.toString()} onValueChange={(value) => setSummaryMonth(parseInt(value))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {months.map((month) => (
+                        <SelectItem key={month.value} value={month.value.toString()}>
+                          {month.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={summaryYear.toString()} onValueChange={(value) => setSummaryYear(parseInt(value))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {years.map((year) => (
+                        <SelectItem key={year} value={year.toString()}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
+              <Select value={summaryLocation} onValueChange={setSummaryLocation}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All locations" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All locations</SelectItem>
+                  {locations.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.display_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="text-center py-2">
+              <p className="text-xs sm:text-sm text-gray-600">{expenseSummary?.label || 'Loading summary...'}</p>
+              <p className="text-2xl sm:text-3xl font-bold text-red-600">
+                {formatCurrency(expenseSummary?.total || 0)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {expenseSummary?.count || 0} expense{(expenseSummary?.count || 0) === 1 ? '' : 's'}
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Rank</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Entries</TableHead>
+                    <TableHead>Share</TableHead>
+                    <TableHead>Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(expenseSummary?.by_category || []).map((row, index) => (
+                    <TableRow key={row.category}>
+                      <TableCell className="text-sm text-gray-600">{index + 1}</TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {row.category}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm">{row.count}</TableCell>
+                      <TableCell className="text-sm text-gray-600">{row.percent.toFixed(1)}%</TableCell>
+                      <TableCell className="font-medium text-red-600">{formatCurrency(row.total)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {expenseSummary && expenseSummary.by_category.length === 0 && (
+                <div className="text-center py-8 text-gray-500">No expenses recorded for this period.</div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-4 sm:mb-6">
+          <CardHeader>
+            <CardTitle className="text-lg sm:text-xl">Expenses ranked highest to lowest</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto max-h-[480px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(expenseSummary?.ranked_expenses || []).map((expense) => (
+                    <TableRow key={expense.id}>
+                      <TableCell className="text-sm font-medium">{expense.rank}</TableCell>
+                      <TableCell className="text-sm">{new Date(expense.date).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {expense.location?.name || 'Unknown'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {expense.category}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm">{expense.description}</TableCell>
+                      <TableCell className="font-medium text-red-600">{formatCurrency(expense.amount)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {expenseSummary && expenseSummary.ranked_expenses.length === 0 && (
+                <div className="text-center py-8 text-gray-500">No expenses recorded for this period.</div>
+              )}
             </div>
           </CardContent>
         </Card>

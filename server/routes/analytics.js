@@ -4,6 +4,7 @@ const { authenticateToken } = require('../middleware/auth');
 const { customerFrequencyCalculator } = require('../utils/customerFrequencyCalculator');
 const { constructEndDate } = require("../utils/constructEndDate");
 const { constructPeriodRange } = require("../utils/constructPeriodRange");
+const { summarizeExpenses } = require('../utils/expenseSummary');
 
 const router = express.Router();
 
@@ -291,24 +292,31 @@ router.get('/period-report', authenticateToken, async (req, res) => {
     let expenseParams = [startDate, endDate];
     let expenseLocationFilter = '';
     if (location_id) {
-      expenseLocationFilter = ' AND location_id = $3';
+      expenseLocationFilter = ' AND e.location_id = $3';
       expenseParams.push(location_id);
     }
 
     const expensesResult = await db.query(
-      `SELECT * FROM expenses WHERE date >= $1 AND date <= $2${expenseLocationFilter}`,
+      `SELECT
+         e.*,
+         l.id as location_id,
+         l.display_name as location_name
+       FROM expenses e
+       LEFT JOIN locations l ON e.location_id = l.id
+       WHERE e.date >= $1 AND e.date <= $2${expenseLocationFilter}`,
       expenseParams
     );
 
     const orders = ordersResult.rows;
-    const expenses = expensesResult.rows;
+    const expenseSummary = summarizeExpenses(expensesResult.rows);
+    const expenses = expenseSummary.ranked_expenses.map(({ rank, ...expense }) => expense);
     const activeOrders = orders.filter(o => o.status !== 'cancelled');
 
     const revenue = activeOrders
       .filter(o => o.payment_status === 'paid')
       .reduce((sum, order) => sum + parseFloat(order.total_amount), 0);
 
-    const totalExpenses = expenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
+    const totalExpenses = expenseSummary.total;
 
     const periodStart = new Date(startDate);
     const periodEnd = new Date(endDate + 'T23:59:59');
@@ -380,6 +388,8 @@ router.get('/period-report', authenticateToken, async (req, res) => {
       month: label,
       orders: orders || [],
       expenses: expenses || [],
+      expensesByCategory: expenseSummary.by_category,
+      rankedExpenses: expenseSummary.ranked_expenses,
       customers,
       topByCash,
       topByWeight,

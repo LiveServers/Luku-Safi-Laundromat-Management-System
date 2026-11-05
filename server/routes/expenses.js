@@ -1,8 +1,14 @@
 const express = require('express');
 const db = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
+const { summarizeExpenses, monthRange } = require('../utils/expenseSummary');
 
 const router = express.Router();
+
+const MONTH_LABELS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
 
 // Get all expenses
 router.get('/', authenticateToken, async (req, res) => {
@@ -90,6 +96,62 @@ router.get('/', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Get expenses error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/summary', authenticateToken, async (req, res) => {
+  try {
+    const now = new Date();
+    const year = req.query.year || String(now.getFullYear());
+    const month = req.query.month || String(now.getMonth() + 1);
+    const allTime = req.query.all_time === 'true';
+    const locationId = req.query.location_id;
+
+    const clauses = [];
+    const queryParams = [];
+
+    if (!allTime) {
+      const range = monthRange(year, month);
+      if (!range) {
+        return res.status(400).json({ error: 'A valid year and month are required' });
+      }
+      queryParams.push(range.startDate, range.endDate);
+      clauses.push(`e.date >= $1 AND e.date <= $2`);
+    }
+
+    if (locationId && locationId !== 'all') {
+      queryParams.push(locationId);
+      clauses.push(`e.location_id = $${queryParams.length}`);
+    }
+
+    const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const result = await db.query(
+      `SELECT
+         e.*,
+         l.id as location_id,
+         l.display_name as location_name
+       FROM expenses e
+       LEFT JOIN locations l ON e.location_id = l.id
+       ${whereClause}
+       ORDER BY e.amount DESC, e.date DESC`,
+      queryParams
+    );
+
+    const summary = summarizeExpenses(result.rows);
+    const monthNumber = parseInt(month, 10);
+
+    res.json({
+      all_time: allTime,
+      year: allTime ? null : parseInt(year, 10),
+      month: allTime ? null : monthNumber,
+      label: allTime
+        ? 'All recorded expenses'
+        : `${MONTH_LABELS[monthNumber - 1]} ${year}`,
+      ...summary,
+    });
+  } catch (error) {
+    console.error('Expense summary error:', error);
     res.status(500).json({ error: error.message });
   }
 });
