@@ -9,7 +9,9 @@
 ## Git workflow
 
 - Start each issue on a fresh branch from the latest default branch. Name it `<type>/<issue-number>-<short-slug>` and use that branch for follow-up work on the same issue.
+- Present changes for review and wait for the user's approval before committing. Present any subsequent edits for review before committing them.
 - Use Conventional Commits for each authored commit, for example `docs: document the Git workflow`.
+- Include a `Summary` section in every commit body. Leave a blank line after the subject and use short Markdown bullets to describe what changed and why. Add a `Verification` section when checks were run or limitations affect the change.
 - Record durable instructions in the relevant repository documentation, such as `AGENTS.md` for agent guidance. Skip GitHub issues and standalone Markdown files for discussion records.
 
 ## Agent skills
