@@ -14,17 +14,23 @@ A comprehensive management system for laundromat businesses built with Next.js a
 
 ## Tech Stack
 
-- **Frontend**: Next.js 13, React, TypeScript, Tailwind CSS, shadcn/ui
+- **Frontend**: Next.js 16, React, TypeScript, Tailwind CSS, shadcn/ui
 - **Backend**: Node.js, Express.js
 - **Database**: PostgreSQL
 - **Authentication**: JWT
 - **Deployment**: Docker
 
+### Dependency compatibility
+
+- React 18 matches the peer dependency range of the current `react-day-picker` version. Upgrading to React 19 requires updating the date picker and checking calendar behavior.
+- ESLint 9 matches the peer dependency ranges of the import, React, and accessibility plugins bundled with `eslint-config-next`.
+- Express 4 supports the backend's unnamed wildcard route in `server/index.js`. Express 5 requires changing the route syntax and verifying the 404 response.
+
 ## Quick Start
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 24 LTS
 - Docker and Docker Compose
 - Git
 
