@@ -6,6 +6,12 @@
 - Use Zod for schema validation. Validate untrusted data at the boundary, including frontend form submissions and backend requests. Enforce validation on the server even when the client also validates, and reuse schemas where the input contract matches.
 - Use the current OWASP Top 10 to review frontend and backend changes. Check authorization, input handling, secrets, and configuration where relevant. Check dependency changes and affected existing packages for known CVEs using the package manager's audit and upstream advisories. Apply compatible fixes within scope and flag unresolved findings.
 
+## Git workflow
+
+- Start each issue on a fresh branch from the latest default branch. Name it `<type>/<issue-number>-<short-slug>` and use that branch for follow-up work on the same issue.
+- Use Conventional Commits for each authored commit, for example `docs: document the Git workflow`.
+- Record durable instructions in the relevant repository documentation, such as `AGENTS.md` for agent guidance. Skip GitHub issues and standalone Markdown files for discussion records.
+
 ## Agent skills
 
 ### Issue tracker
