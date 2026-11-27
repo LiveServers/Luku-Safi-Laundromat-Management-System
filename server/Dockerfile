@@ -1,7 +1,8 @@
 FROM node:24-alpine
-WORKDIR /app
-COPY package*.json ./
+WORKDIR /workspace/server
+COPY server/package*.json ./
 RUN npm ci --omit=dev
-COPY . .
+COPY server/ ./
+COPY shared/schemas/staff-account-schema.js /workspace/shared/schemas/staff-account-schema.js
 EXPOSE 5000
 CMD ["npm", "start"]

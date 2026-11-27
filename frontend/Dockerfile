@@ -6,7 +6,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Install dependencies based on the preferred package manager
-COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
+COPY frontend/package.json frontend/yarn.lock* frontend/package-lock.json* frontend/pnpm-lock.yaml* ./
 RUN \
   if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
   elif [ -f package-lock.json ]; then npm ci; \
@@ -16,9 +16,10 @@ RUN \
 
 # Rebuild the source code only when needed
 FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+WORKDIR /workspace/frontend
+COPY --from=deps /app/node_modules /workspace/node_modules
+COPY frontend/ ./
+COPY shared/schemas/staff-account-schema.js /workspace/shared/schemas/staff-account-schema.js
 
 # Build Next.js application
 RUN \
@@ -38,9 +39,9 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Copy the built application
-COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /workspace/frontend/.next ./.next
+COPY --from=builder /workspace/node_modules ./node_modules
+COPY --from=builder /workspace/frontend/package.json ./package.json
 # COPY --from=builder /app/public ./public
 
 USER nextjs

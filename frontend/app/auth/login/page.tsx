@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Waves } from 'lucide-react';
-import Link from 'next/link';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -105,15 +104,6 @@ export default function Login() {
                 Sign In
               </Button>
             </form>
-
-            <div className="mt-6 text-center">
-              <p className="text-sm sm:text-base text-gray-600">
-                Don&apos;t have an account?{' '}
-                <Link href="/auth/register" className="text-blue-600 hover:underline">
-                  Sign up
-                </Link>
-              </p>
-            </div>
           </CardContent>
         </Card>
       </div>

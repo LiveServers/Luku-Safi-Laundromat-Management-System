@@ -18,7 +18,6 @@ const membershipsRoutes = require('./routes/memberships');
 const {initTelegramExpenseBot} = require('./services/telegram/telegramExpenseBot');
 
 const app = express();
-const PORT = process.env.PORT;
 
 // Middleware
 app.use(helmet());
@@ -61,14 +60,16 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-if (process.env.TELEGRAM_EXPENSE_BOT_ENABLED === 'true') {
-  initTelegramExpenseBot().catch((error) => {
-    console.error('Failed to start Telegram expense bot:', error);
+if (require.main === module) {
+  if (process.env.TELEGRAM_EXPENSE_BOT_ENABLED === 'true') {
+    initTelegramExpenseBot().catch((error) => {
+      console.error('Failed to start Telegram expense bot:', error);
+    });
+  }
+
+  app.listen('5000', () => {
+    console.log(`Server running on port 5000`);
   });
 }
-
-app.listen('5000', () => {
-  console.log(`Server running on port 5000`);
-});
 
 module.exports = app;

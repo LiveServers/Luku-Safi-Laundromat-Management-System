@@ -87,6 +87,22 @@ The PostgreSQL database will be automatically initialized with:
 - Proper indexes and constraints
 - Audit triggers for tracking changes
 
+### First-owner setup
+
+On a fresh database, an operator with access to the backend container creates the first owner after database initialization. List the available locations with:
+
+```bash
+docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT id, display_name FROM locations ORDER BY display_name"'
+```
+
+Pipe a JSON object with `name`, `email`, `password`, and `location_id` from your secret manager into the command below. Use an existing location ID and a strong password of at most 72 UTF-8 bytes. Keep the password out of command arguments and shell history.
+
+```bash
+docker compose exec -T backend node scripts/create-first-owner.js
+```
+
+For a backend running locally, pipe the same JSON into `node --env-file=.env scripts/create-first-owner.js` from the `server` directory using the backend's database settings. Setup refuses to run when the database already has a user. Sign in as the owner to create subsequent accounts from **Users**.
+
 ### Database Access
 
 - **Host**: localhost
@@ -119,7 +135,6 @@ The PostgreSQL database will be automatically initialized with:
 ## API Endpoints
 
 ### Authentication
-- `POST /api/auth/register` - Register new user
 - `POST /api/auth/login` - User login
 - `POST /api/auth/add-user` - Add new user (owner only)
 - `GET /api/auth/users` - Get all users (owner only)
@@ -184,6 +199,8 @@ The PostgreSQL database will be automatically initialized with:
 - Card-based layouts for mobile
 
 ## Development
+
+Install dependencies in both `frontend` and `server`. Run the Vitest suite with `TEST_DATABASE_URL` set to a disposable PostgreSQL database and execute `npm test` from `server`. The test database user needs permission to create schemas and install `uuid-ossp`.
 
 ### Running in Development Mode
 

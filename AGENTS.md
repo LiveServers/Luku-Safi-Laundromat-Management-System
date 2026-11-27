@@ -1,6 +1,7 @@
 ## Engineering standards
 
 - Design for reuse across the frontend and backend. Compose focused UI components and hooks on the frontend and focused modules and services on the backend. Reuse existing code when its contract fits, and extract shared logic when multiple callers need the same behavior.
+- Organize files by responsibility and domain. Put schemas in a dedicated `schemas/` directory or with their existing contract, and group backend services by domain under `server/services/`, such as `services/users/` and `services/telegram/`. Keep routes, scripts, and database helpers in their respective directories.
 - Use the latest stable package release when adding or upgrading dependencies. Verify the published version, check compatibility with the project and runtime, and update the lockfile. Flag compatibility blockers before choosing an older stable version.
 - Follow test-driven development with Vitest for frontend and backend behavior changes. Write a test that fails for the expected reason, implement the smallest change that passes it, then refactor and rerun the relevant suite.
 - Use Zod for schema validation. Validate untrusted data at the boundary, including frontend form submissions and backend requests. Enforce validation on the server even when the client also validates, and reuse schemas where the input contract matches.

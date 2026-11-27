@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { z } from 'zod';
+import { createStaffAccountSchema } from '../../../shared/schemas/staff-account-schema';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Plus, ArrowLeft, Users, Shield, User } from 'lucide-react';
+
+const staffAccountSchema = createStaffAccountSchema(z);
 
 interface Location {
   id: string;
@@ -100,8 +104,9 @@ export default function UsersManagement() {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!newUser.name || !newUser.email || !newUser.password || !newUser.role) {
-      alert('All fields are required');
+    const account = staffAccountSchema.safeParse(newUser);
+    if (!account.success) {
+      alert(account.error.issues[0].message);
       return;
     }
 
@@ -113,7 +118,7 @@ export default function UsersManagement() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(newUser),
+        body: JSON.stringify(account.data),
       });
 
       if (response.ok) {
