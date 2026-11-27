@@ -1,0 +1,11 @@
+**
+!server/
+!server/**
+server/node_modules
+server/coverage
+server/.env*
+server/**/.env*
+server/**/*.pem
+!shared/
+!shared/schemas/
+!shared/schemas/staff-account-schema.js

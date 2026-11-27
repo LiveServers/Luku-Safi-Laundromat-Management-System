@@ -21,7 +21,9 @@ services:
       - laundromat_network
 
   backend:
-    build: ./server
+    build:
+      context: .
+      dockerfile: server/Dockerfile
     container_name: laundromat_backend
     restart: unless-stopped
     ports:
@@ -36,7 +38,9 @@ services:
       - laundromat_network
 
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     container_name: laundromat_frontend
     restart: unless-stopped
     ports:

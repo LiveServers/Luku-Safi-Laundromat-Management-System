@@ -1,0 +1,10 @@
+**
+!frontend/
+!frontend/**
+frontend/node_modules
+frontend/.next
+frontend/.env*
+frontend/**/*.tsbuildinfo
+!shared/
+!shared/schemas/
+!shared/schemas/staff-account-schema.js

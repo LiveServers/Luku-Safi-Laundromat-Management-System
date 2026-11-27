@@ -4,60 +4,14 @@ const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 const { authenticateToken, requireOwner } = require('../middleware');
 
+const { createUser } = require('../services/users/user-accounts');
+const { createStaffAccountSchema } = require('../../shared/schemas/staff-account-schema');
+const { z } = require('zod');
+const { FOREIGN_KEY_VIOLATION, UNIQUE_VIOLATION } = require('../db/sqlstate');
+
+const staffAccountSchema = createStaffAccountSchema(z);
+
 const router = express.Router();
-
-// Register
-router.post('/register', async (req, res) => {
-  try {
-    const { email, password, name, role = 'owner', location_id } = req.body;
-
-    if (!email || !password || !name || !location_id) {
-      return res.status(400).json({ error: 'All fields including location are required' });
-    }
-
-    // Check if user already exists
-    const existingUser = await db.query(
-      'SELECT id FROM users WHERE email = $1',
-      [email]
-    );
-
-    if (existingUser.rows.length > 0) {
-      return res.status(400).json({ error: 'User already exists' });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create user
-    const result = await db.query(
-      'INSERT INTO users (email, password, name, role, location_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, name, role, location_id',
-      [email, hashedPassword, name, role, location_id]
-    );
-
-    const user = result.rows[0];
-
-    // Generate JWT
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.status(201).json({
-      message: 'User created successfully',
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role
-      }
-    });
-  } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // Login
 router.post('/login', async (req, res) => {
@@ -111,41 +65,19 @@ router.post('/login', async (req, res) => {
 
 // Add user (owner only)
 router.post('/add-user', authenticateToken, requireOwner, async (req, res) => {
+  const account = staffAccountSchema.safeParse(req.body);
+  if (!account.success) {
+    return res.status(400).json({ error: `Invalid account details: ${account.error.issues.map(issue => issue.path.join('.') || 'body').join(', ')}` });
+  }
+
   try {
-    const { email, password, name, role, location_id } = req.body;
-
-    if (!email || !password || !name || !role || !location_id) {
-      return res.status(400).json({ error: 'All fields including location are required' });
-    }
-
-    // Check if user already exists
-    const existingUser = await db.query(
-      'SELECT id FROM users WHERE email = $1',
-      [email]
-    );
-
-    if (existingUser.rows.length > 0) {
-      return res.status(400).json({ error: 'User already exists' });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create user
-    const result = await db.query(
-      'INSERT INTO users (email, password, name, role, location_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, name, role, location_id, created_at',
-      [email, hashedPassword, name, role, location_id]
-    );
-
-    const user = result.rows[0];
-
-    res.status(201).json({
-      message: 'User created successfully',
-      user
-    });
+    const user = await createUser(db.pool, account.data);
+    res.status(201).json({ message: 'User created successfully', user });
   } catch (error) {
-    console.error('Add user error:', error);
-    res.status(500).json({ error: error.message });
+    if (error.code === UNIQUE_VIOLATION) return res.status(400).json({ error: 'User already exists' });
+    if (error.code === FOREIGN_KEY_VIOLATION) return res.status(400).json({ error: 'Choose an existing location' });
+    console.error('Add user failed:', error.code || error.name);
+    res.status(500).json({ error: 'Could not create user' });
   }
 });
 
